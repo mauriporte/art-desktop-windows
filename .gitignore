@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.log
+debug.log
+*.local.json
+# machine-specific: the path of the wallpaper that was there before
+wallpaper/previous-wallpaper.txt
+screensaver/*.scr

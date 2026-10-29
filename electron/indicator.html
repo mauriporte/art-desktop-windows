@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  /* click-through (main's cursor watch opens the slider); only the mark shows */
+  /* every mark is the same small orange dot as the corners' (3 px), 90 % see-through: there, but barely.
+     It sits at its spot on screen, worked out from the hot spot's rectangle (main passes it as r=x,y,w,h) */
+  i { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #E8650A; opacity: .1; }
+  /* a Claude Code permission request is waiting: the notch's dot lights up fully and pulses */
+  body.alert i { opacity: 1; animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+</style>
+</head>
+<body><i></i>
+<script>
+  const q = new URLSearchParams(location.search)
+  // the dot touches its screen edge (1 px in), centred along the hot spot; corners tuck into their corner
+  const [rx, ry, rw, rh] = q.get('r').split(',').map(Number), edge = q.get('edge'), corner = q.get('corner')
+  const at = corner === 'tl' ? [rx + 1, ry + 1] : corner === 'tr' ? [rx + rw - 4, ry + 1]
+    : edge === 'left' ? [rx + 1, ry + rh / 2] : edge === 'right' ? [rx + rw - 4, ry + rh / 2]
+    : edge === 'bottom' ? [rx + rw / 2, ry + rh - 4] : [rx + rw / 2, ry + 1]
+  const dot = document.querySelector('i')
+  const put = () => { dot.style.left = `${at[0] - screenX}px`; dot.style.top = `${at[1] - screenY}px` }
+  put(); setInterval(put, 2000) // the window can be moved by Windows (e.g. pushed back on-screen)
+  art.claude?.onPending((n) => document.body.classList.toggle('alert', n > 0))
+</script>
+</body>
+</html>

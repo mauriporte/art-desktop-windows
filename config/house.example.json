@@ -1,0 +1,35 @@
+{
+  "_comment": "Copy to ~/.config/art-desktop/house.json and fill in what you have. Anything left out simply doesn't show.",
+  "city": "London",
+  "relayName": "Me (notch)",
+  "adbControl": { "api": "http://192.168.1.20:8002", "scrcpy": "http://192.168.1.20:8001/" },
+  "views": { "Max": "my-dashboard/some-view", "YouTube": "my-media-dashboard/youtube" },
+  "vnc": {
+    "dashboard": "my-dashboard", "view": "vnc", "host": "My VNC box", "upSensor": "binary_sensor.vnc_box_up",
+    "helpers": { "name": "input_text.vnc_name", "ip": "input_text.vnc_ip", "port": "input_number.vnc_port",
+      "password": "input_text.vnc_password", "resolution": "input_text.vnc_resolution" },
+    "addScript": "vnc_add", "removeScript": "vnc_remove"
+  },
+  "jarvis": { "name": "Assistant", "pipeline": "Home Assistant", "languageSelect": "", "speakerSwitch": "", "tts": "tts.piper" },
+  "tiles": {
+    "Lights": { "label": "Lights", "sections": [
+      { "section": "Rooms", "cols": 3, "tiles": [ { "entity": "light.living_room", "name": "Living room" }, { "entity": "light.bedroom", "name": "Bedroom" } ] } ] },
+    "Home": { "label": "Home", "sections": [
+      { "section": "Cameras", "cols": 2, "tiles": [ { "camera": "camera.front_door", "name": "Front door", "capture": "" } ] },
+      { "section": "Switches", "cols": 2, "tiles": [
+        { "entity": "switch.living_room_lamp", "name": "Lamp" },
+        { "entity": "sensor.outdoor_temperature", "name": "Outside" },
+        { "entity": "button.doorbell_snapshot", "name": "Snapshot", "icon": "restart", "confirm": true } ] } ] },
+    "Assistant": { "label": "Assistant", "talk": true, "sections": [] }
+  },
+  "torrents": { "download": "sensor.qbittorrent_download_speed", "upload": "sensor.qbittorrent_upload_speed",
+    "active": "sensor.qbittorrent_active_torrents", "altSpeed": "switch.qbittorrent_alternative_speed" },
+  "dashboards": [
+    { "name": "Home", "path": "lovelace", "icon": "home" },
+    { "name": "Cameras", "path": "my-cameras", "icon": "cameras" },
+    { "name": "Map", "path": "map", "icon": "map" }
+  ],
+  "ideas": { "vault": "C:/Users/me/Obsidian", "folder": "Ideas" },
+  "tabIcons": { "Lights": "lights", "Home": "cctv", "Assistant": "bot" },
+  "es": { "Living room": "Salón", "Bedroom": "Dormitorio", "Front door": "Puerta", "Lamp": "Lámpara", "Outside": "Fuera" }
+}
