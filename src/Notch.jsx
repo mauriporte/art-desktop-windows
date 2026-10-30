@@ -226,7 +226,7 @@ export function Today({ city, setCity }) {
 
 export default function Notch() {
   useLang()
-  const { open, pinned, togglePin, enter } = useSlider()
+  const { open, pinned, togglePin, enter, holdOpen } = useSlider()
   const [tab, setTab] = useState(query.get('tab') || load('tab', 'Today'))
   const [tint, setTint] = useState(Number(load('tint', 55)))
   const [city, setCity] = useCity()
@@ -236,7 +236,7 @@ export default function Notch() {
   const [tip, setTip] = useState(null) // { text, x, y } of the hovered tab
   const talkTab = Object.keys(house.tiles ?? {}).find((k) => house.tiles[k].talk)
   // the dashboard overlay's assistant tile opens the talk card here
-  useEffect(() => { window.art?.overlay?.onTalk(() => { if (talkTab) { setTab(talkTab); save('tab', talkTab) } }) }, [])
+  useEffect(() => { window.art?.overlay?.onTalk(() => { holdOpen(); if (talkTab) { setTab(talkTab); save('tab', talkTab) } }) }, [])
   const [edges, setEdges] = useState({ l: false, r: false })
   const strip = () => tabRow.current?.firstChild
   const readEdges = () => { const el = strip(); if (!el) return; const l = el.scrollLeft > 1, r = el.scrollLeft + el.clientWidth < el.scrollWidth - 1; if (l !== edges.l || r !== edges.r) setEdges({ l, r }) }

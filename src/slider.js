@@ -34,5 +34,7 @@ export function useSlider() {
     }, 300)
     return () => clearInterval(t)
   }, [open, pinned])
-  return { open, setOpen, pinned, togglePin, enter }
+  // opened from elsewhere (the dashboard's assistant tile): stay open until the cursor has been in once
+  const holdOpen = () => { visited.current = false }
+  return { open, setOpen, pinned, togglePin, enter, holdOpen }
 }
