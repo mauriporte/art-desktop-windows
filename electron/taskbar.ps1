@@ -15,7 +15,13 @@ public static class Taskbar {
     }
     return l;
   }
-  public static void Set(bool show) { foreach (var h in All()) ShowWindow(h, show ? 5 : 0); }
+  [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
+  [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr h, int i, int v);
+  [DllImport("user32.dll")] static extern bool SetLayeredWindowAttributes(IntPtr h, uint key, byte alpha, uint flags);
+  // showing also undoes the see-through the running app sets while the taskbar is off
+  public static void Set(bool show) { foreach (var h in All()) {
+    if (show && (GetWindowLong(h, -20) & 0x80000) != 0) { SetLayeredWindowAttributes(h, 0, 255, 2); SetWindowLong(h, -20, GetWindowLong(h, -20) & ~0x80000); }
+    ShowWindow(h, show ? 5 : 0); } }
   public static bool Visible() { foreach (var h in All()) if (IsWindowVisible(h)) return true; return false; }
 }
 '@

@@ -50,6 +50,18 @@ public static class Wins {
   // the visible windows' frames, front to back (the screen grabber's click-a-window): DWM's bounds, without the shadow
   [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")] static extern int DwmRect(IntPtr h, int attr, out RECT r, int size);
   public struct RECT { public int L, T, R, B; }
+  // a reserved screen strip (Windows' AppBar, what the taskbar itself uses): maximized windows stop at its edge
+  [StructLayout(LayoutKind.Sequential)] struct APPBARDATA { public uint cbSize; public IntPtr hWnd; public uint msg; public uint edge; public RECT rc; public IntPtr lParam; }
+  [DllImport("shell32.dll")] static extern IntPtr SHAppBarMessage(uint m, ref APPBARDATA d);
+  public static void AppBar(IntPtr h, uint edge, int l, int t, int r, int b) {
+    var d = new APPBARDATA { cbSize = (uint)Marshal.SizeOf(typeof(APPBARDATA)), hWnd = h, edge = edge };
+    SHAppBarMessage(0, ref d); // ABM_NEW (ignored when already registered)
+    d.rc = new RECT { L = l, T = t, R = r, B = b };
+    SHAppBarMessage(2, ref d); // ABM_QUERYPOS: Windows may trim it against the taskbar
+    if (edge == 0) d.rc.R = d.rc.L + (r - l); else if (edge == 2) d.rc.L = d.rc.R - (r - l); else if (edge == 1) d.rc.B = d.rc.T + (b - t); else d.rc.T = d.rc.B - (b - t);
+    SHAppBarMessage(3, ref d); // ABM_SETPOS
+  }
+  public static void AppBarOff(IntPtr h) { var d = new APPBARDATA { cbSize = (uint)Marshal.SizeOf(typeof(APPBARDATA)), hWnd = h }; SHAppBarMessage(1, ref d); }
   public static string Rects() {
     var items = new List<string>();
     EnumWindows((h, l) => {
@@ -79,6 +91,20 @@ public static class Wins {
     var l = new List<INP>();
     foreach (char c in s) foreach (uint up in new uint[] { 0, 2 }) { var i = new INP(); i.type = 1; i.ki.scan = c; i.ki.flags = 4 | up; l.Add(i); }
     if (l.Count > 0) SendInput((uint)l.Count, l.ToArray(), Marshal.SizeOf(typeof(INP)));
+  }
+  // hide every taskbar (main + the other screens'); doing it again when it's hidden is harmless, so it can run often
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string title);
+  [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr h, int i, int v);
+  [DllImport("user32.dll")] static extern bool SetLayeredWindowAttributes(IntPtr h, uint key, byte alpha, uint flags);
+  public static void HideTaskbars() {
+    foreach (var cls in new[] { "Shell_TrayWnd", "Shell_SecondaryTrayWnd" }) {
+      IntPtr h = IntPtr.Zero;
+      while ((h = FindWindowEx(IntPtr.Zero, h, cls, null)) != IntPtr.Zero) {
+        // fully see-through as well: when Explorer shows it again (a reserved strip changed) nothing flashes
+        SetWindowLong(h, -20, GetWindowLong(h, -20) | 0x80000 /* WS_EX_LAYERED */); SetLayeredWindowAttributes(h, 0, 0, 2 /* LWA_ALPHA */);
+        ShowWindow(h, 0);
+      }
+    }
   }
   public static void Key(byte vk) { keybd_event(vk, 0, 0, UIntPtr.Zero); keybd_event(vk, 0, 2, UIntPtr.Zero); }
   public static void WinKey(byte vk) { keybd_event(0x5B, 0, 0, UIntPtr.Zero); keybd_event(vk, 0, 0, UIntPtr.Zero); keybd_event(vk, 0, 2, UIntPtr.Zero); keybd_event(0x5B, 0, 2, UIntPtr.Zero); }
@@ -192,7 +218,11 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
       'media' { [Console]::Out.WriteLine((MediaInfo)) }
       'mediaart' { [Console]::Out.WriteLine((MediaArt)) }
       'mediactl' { [Console]::Out.WriteLine((MediaControl $arg)) }
+      'tbhide' { [Wins]::HideTaskbars(); [Console]::Out.WriteLine('{"ok":true}') }
       'bottom' { [Wins]::Bottom([IntPtr][long]$arg); [Console]::Out.WriteLine('{"ok":true}') }
+      # reserve a screen strip: appbar <hwnd> <edge 0 left, 1 top, 2 right, 3 bottom> <l> <t> <r> <b>; appbaroff <hwnd>
+      'appbar' { $p = $arg -split '\s+'; [Wins]::AppBar([IntPtr][long]$p[0], [uint32]$p[1], [int]$p[2], [int]$p[3], [int]$p[4], [int]$p[5]); [Console]::Out.WriteLine('{"ok":true}') }
+      'appbaroff' { [Wins]::AppBarOff([IntPtr][long]$arg); [Console]::Out.WriteLine('{"ok":true}') }
       # quick settings for the notch
       'quick' { $a = [Audio]::Get() | ConvertFrom-Json
         [Console]::Out.WriteLine((@{ vol = $a.vol; mute = $a.mute; saver = ([Wins]::PowerMode() -eq 'saver'); night = (NightLight) } | ConvertTo-Json -Compress)) }

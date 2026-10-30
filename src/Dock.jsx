@@ -85,6 +85,8 @@ export default function Dock() {
   const along = (vertical ? size.h : size.w) - 32
   const step = Math.min(60, along / Math.max(items.length, 1))
   const tile = Math.max(24, step - 12)
+  // the space the icons take at rest (no magnify): what "Reserve the dock's space" keeps free
+  useEffect(() => { window.art?.dockThick(Math.round(tile + gap + 6)) }, [tile, gap])
   const away = { left: [1, 0], right: [-1, 0], top: [0, 1], bottom: [0, -1] }[edge]
 
   // magnify wave: icons near the cursor grow (up to 1.5x) and lift away from the edge

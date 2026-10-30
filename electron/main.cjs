@@ -87,9 +87,11 @@ const SCRCPY_CSS = [
 // the dock's visible, clickable part: the strip along its edge, or the whole window while a stack is open
 function dockShape(w, s) {
   if (w.expanded) return [{ x: 0, y: 0, width: s.w, height: s.h }]
-  const off = Math.round((Math.max(s.w, s.h) - s.len) / 2)
-  return { left: [{ x: 0, y: off, width: DOCK_THICK, height: s.len }], right: [{ x: s.w - DOCK_THICK, y: off, width: DOCK_THICK, height: s.len }],
-    top: [{ x: off, y: 0, width: s.len, height: DOCK_THICK }], bottom: [{ x: off, y: s.h - DOCK_THICK, width: s.len, height: DOCK_THICK }] }[w.edge]
+  // at rest only the icons' own strip (its invisible rest would sit over what's next to the dock and take its clicks);
+  // the full depth just while the cursor is on it, for the magnify wave (the cursor watch sets w.wide)
+  const off = Math.round((Math.max(s.w, s.h) - s.len) / 2), t = w.wide || !w.thick ? DOCK_THICK : w.thick
+  return { left: [{ x: 0, y: off, width: t, height: s.len }], right: [{ x: s.w - t, y: off, width: t, height: s.len }],
+    top: [{ x: off, y: 0, width: s.len, height: t }], bottom: [{ x: off, y: s.h - t, width: s.len, height: t }] }[w.edge]
 }
 
 function place(w, open) {
@@ -124,6 +126,13 @@ setInterval(() => {
   if (!app.isReady()) return // the screen module only works once the app is up
   const p = screen.getCursorScreenPoint()
   for (const w of wins) {
+    // an open dock: full depth once the cursor is on its icons, back to the icons' strip when it has left the full depth
+    if (w.kind === 'dock' && w.open && !w.expanded && !w.win.isDestroyed()) {
+      const b = w.win.getBounds(), s = bounds(w.kind, w.display.bounds, w.edge).s
+      const within = (rects) => rects.some((r) => p.x >= b.x + r.x && p.x < b.x + r.x + r.width && p.y >= b.y + r.y && p.y < b.y + r.y + r.height)
+      const wide = within(dockShape({ ...w, wide: w.wide }, s))
+      if (wide !== !!w.wide) { w.wide = wide; w.win.setShape(dockShape(w, s)) }
+    }
     if (w.open || w.hot.isDestroyed()) continue
     const r = bounds(w.kind, w.display.bounds, w.edge).hot
     if (p.x >= r.x && p.x < r.x + r.width && p.y >= r.y && p.y < r.y + r.height) { place(w, true); w.win.webContents.send('notch:opened') }
@@ -307,7 +316,7 @@ const MENU_ES = { 'Run as administrator': 'Ejecutar como administrador', 'Open f
   'Close window': 'Cerrar ventana', 'Add stack…': 'Añadir pila…', 'Remove stack': 'Quitar la pila', 'Add a stack to the dock': 'Añadir una pila al dock',
   Left: 'Izquierda', Right: 'Derecha', Top: 'Arriba', Bottom: 'Abajo', 'Off on this screen': 'Sin dock en esta pantalla',
   'Icon pack': 'Pack de iconos', 'System icons': 'Iconos del sistema', 'Open icon packs folder': 'Abrir la carpeta de packs de iconos',
-  'Distance from edge': 'Distancia al borde', 'Keep the dock open': 'Mantener el dock abierto', 'Always on top': 'Siempre visible' }
+  'Distance from edge': 'Distancia al borde', 'Keep the dock open': 'Mantener el dock abierto', "Reserve the dock's space": 'Reservar el espacio del dock', 'Always on top': 'Siempre visible' }
 const L = (s) => (menuLang === 'es' ? MENU_ES[s] ?? s : s)
 
 // ---- dock: the taskbar's pinned apps (shortcut files), launched through the shell
@@ -440,8 +449,9 @@ const launchable = (key) => key.startsWith('exe:') ? key.slice(4) : dockApps().s
 ipcMain.handle('dock:activate', async (_e, key) => {
   const ws = (await appWindows())[key]
   if (!ws) return launchable(key) && shell.openPath(launchable(key))
-  const front = ws.find((w) => w.fg)
-  return winCmd(front ? `min ${front.hwnd}` : `front ${ws[0].hwnd}`)
+  // a minimized window can still be Windows' foreground one (the dock never takes focus), so it doesn't count as in front
+  const front = ws.find((w) => w.fg && !w.min)
+  return winCmd(front ? `min ${front.hwnd}` : `front ${(ws.find((w) => w.fg) ?? ws[0]).hwnd}`)
 })
 // right-click on an app: its windows, open another, run as administrator, open file location, close; then the dock menu
 ipcMain.on('dock:appMenu', async (e, lnk, lang, pinned) => {
@@ -541,8 +551,28 @@ ipcMain.handle('tray:show', async () => {
     if (hideTaskbar()) taskbar('Hide')
   }, 500)
 })
-setInterval(async () => { if (hideTaskbar() && Date.now() > trayUntil && (await taskbar('Status'))?.visible) taskbar('Hide') }, 15000)
+setInterval(() => { if (app.isReady() && hideTaskbar() && Date.now() > trayUntil) winCmd('tbhide') }, 2000)
 app.on('will-quit', () => { try { require('child_process').execFileSync('powershell.exe', ['-NoProfile', '-File', path.join(__dirname, 'taskbar.ps1'), 'Show'], { windowsHide: true, timeout: 10000 }) } catch {} })
+
+// the reserved strip belongs to the dock's indicator window, which is always there (Windows ties a reservation to a window)
+// Explorer lays the taskbar out again when a reserved strip changes, which shows it: hide it again if it's switched off
+const rehideTaskbar = () => { for (let ms = 200; ms <= 5000; ms += 300) setTimeout(() => { if (hideTaskbar() && Date.now() > trayUntil) winCmd('tbhide') }, ms) } // Explorer can show it seconds later
+function reserveDock(w) {
+  const on = dockConf()._reserve?.[screenKey(w.display)], b = w.display.bounds, k = w.display.scaleFactor
+  const id = w.hot.getNativeWindowHandle().readBigInt64LE(0)
+  if (!on) return winCmd(`appbaroff ${id}`).then(() => { rehideTaskbar(); setTimeout(fitOverlay, 300) })
+  const t = w.thick ?? DOCK_THICK, edge = { left: 0, top: 1, right: 2, bottom: 3 }[w.edge] // what the icons really take (the page reports it)
+  const r = { left: [b.x, b.y, b.x + t, b.y + b.height], top: [b.x, b.y, b.x + b.width, b.y + t],
+    right: [b.x + b.width - t, b.y, b.x + b.width, b.y + b.height], bottom: [b.x, b.y + b.height - t, b.x + b.width, b.y + b.height] }[w.edge]
+  // Windows moves windows out of a newly reserved strip, this dock included: put it back on its edge
+  return winCmd(`appbar ${id} ${edge} ${r.map((v) => Math.round(v * k)).join(' ')}`).then(() => { rehideTaskbar(); setTimeout(() => { if (!w.win.isDestroyed()) place(w, w.open); fitOverlay() }, 300) })
+}
+app.on('will-quit', () => { for (const w of wins) if (w.kind === 'dock' && !w.hot.isDestroyed()) winCmd(`appbaroff ${w.hot.getNativeWindowHandle().readBigInt64LE(0)}`) })
+
+ipcMain.on('dock:thick', (e, px) => {
+  const w = wins.find((x) => x.win.webContents === e.sender)
+  if (w && w.thick !== px) { w.thick = px; reserveDock(w); w.win.setShape(dockShape(w, bounds(w.kind, w.display.bounds, w.edge).s)) } // a pinned dock is out already: narrow it now
+})
 
 function setOwnPins(list) {
   const conf = dockConf(); conf._pins = list
@@ -573,8 +603,9 @@ function dockMenuItems(w, stackName) {
     conf[screenKey(w.display)] = edge
     fs.mkdirSync(path.dirname(DOCK_CONF), { recursive: true })
     fs.writeFileSync(DOCK_CONF, JSON.stringify(conf, null, 1))
+    winCmd(`appbaroff ${w.hot.getNativeWindowHandle().readBigInt64LE(0)}`).then(rehideTaskbar)
     w.win.destroy(); w.hot.destroy(); wins.splice(wins.indexOf(w), 1)
-    if (edge !== 'off') createSlider('dock', w.display, edge)
+    if (edge !== 'off') { createSlider('dock', w.display, edge); setTimeout(() => reserveDock(wins[wins.length - 1]), 800) }
   }
   const label = { left: 'Left', right: 'Right', top: 'Top', bottom: 'Bottom', off: 'Off on this screen' }
   const addStack = async () => {
@@ -583,6 +614,11 @@ function dockMenuItems(w, stackName) {
     if (!r.canceled && p && !list.some((s) => s.path === p)) { list.push({ name: path.basename(p) || p, path: p }); saveStacks(list); refreshDocks() }
   }
   return [
+    // reserved: Windows keeps this dock's strip free, hidden or not (maximized windows stop at its edge); per screen
+    { label: L("Reserve the dock's space"), type: 'checkbox', checked: !!dockConf()._reserve?.[screenKey(w.display)], click: () => {
+      const conf = dockConf(); conf._reserve = { ...conf._reserve, [screenKey(w.display)]: !conf._reserve?.[screenKey(w.display)] }
+      fs.writeFileSync(DOCK_CONF, JSON.stringify(conf, null, 1)); reserveDock(w)
+    } },
     // pinned: this dock stays out instead of hiding (the page keeps the pin, per dock)
     { label: L('Keep the dock open'), type: 'checkbox', checked: !!w.pinned, click: () => w.win.webContents.send('dock:pin') },
     { type: 'separator' },
@@ -727,7 +763,8 @@ function pinOverlay(on) {
 }
 function toggleOverlay() {
   if (overlayWin && !overlayWin.isDestroyed()) { overlayWin.close(); return }
-  const b = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds
+  // the usable area, not the whole screen: a reserved dock strip would push a full-size window off the edge
+  const b = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea
   overlayWin = new BrowserWindow({ ...b, frame: false, transparent: true, hasShadow: false, resizable: false, movable: false, skipTaskbar: true,
     alwaysOnTop: true, show: false, roundedCorners: false, thickFrame: false, backgroundColor: '#00000000',
     webPreferences: { preload: path.join(__dirname, 'preload.cjs') } })
@@ -740,6 +777,13 @@ function toggleOverlay() {
 ipcMain.on('overlay:pin', (_e, on) => { const d = overlayConf(); d.pinned = !!on; fs.writeFileSync(OVERLAY, JSON.stringify(d, null, 1)); pinOverlay(!!on) })
 app.whenReady().then(() => { if (overlayConf().pinned) setTimeout(toggleOverlay, 3000) })
 ipcMain.on('overlay:toggle', toggleOverlay)
+// the usable area changed (a dock reserved or released its strip, or the taskbar moved): the dashboard re-fits, or its
+// right edge, with the side panels' X, ends up under a reserved dock
+function fitOverlay() {
+  if (!overlayWin || overlayWin.isDestroyed()) return
+  overlayWin.setBounds(screen.getDisplayMatching(overlayWin.getBounds()).workArea)
+}
+app.whenReady().then(() => screen.on('display-metrics-changed', fitOverlay))
 // click-through: the dashboard lets clicks pass to the windows behind, except over its own click-through button (so it
 // can be switched back): the cursor is watched and the window takes clicks only while the cursor is on that button
 let through = false, throughSpot = null
@@ -812,7 +856,8 @@ app.whenReady().then(() => {
   all.forEach((d) => createSlider('notch', d, 'top'))
   createSlider('panel', all.reduce((r, d) => (d.bounds.x + d.bounds.width > r.bounds.x + r.bounds.width ? d : r)), 'right')
   all.forEach((d) => { const e = dockEdge(d, all); if (e !== 'off') createSlider('dock', d, e) })
+  setTimeout(() => wins.filter((w) => w.kind === 'dock').forEach(reserveDock), 1500) // once the windows exist
   createSlider('spotify', all.reduce((r, d) => (d.bounds.x < r.bounds.x ? d : r)), 'left')
-  if (hideTaskbar()) taskbar('Hide')
+  taskbar(hideTaskbar() ? 'Hide' : 'Show') // Show also clears a see-through taskbar left by a killed app
 })
 app.on('window-all-closed', () => app.quit())
