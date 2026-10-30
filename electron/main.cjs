@@ -7,6 +7,8 @@ const jarvis = require('./jarvis.cjs')
 const claude = require('./claude.cjs')
 const house = require('./house.cjs')
 const grab = require('./grab.cjs')
+// one copy at a time: a second one would fight the first over port 8733, the shortcut and the network announcement
+if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0) }
 const receiver = require('./receiver.cjs')
 const ideas = require('./ideas.cjs')
 const projects = require('./projects.cjs')
@@ -305,7 +307,7 @@ const MENU_ES = { 'Run as administrator': 'Ejecutar como administrador', 'Open f
   'Close window': 'Cerrar ventana', 'Add stack…': 'Añadir pila…', 'Remove stack': 'Quitar la pila', 'Add a stack to the dock': 'Añadir una pila al dock',
   Left: 'Izquierda', Right: 'Derecha', Top: 'Arriba', Bottom: 'Abajo', 'Off on this screen': 'Sin dock en esta pantalla',
   'Icon pack': 'Pack de iconos', 'System icons': 'Iconos del sistema', 'Open icon packs folder': 'Abrir la carpeta de packs de iconos',
-  'Distance from edge': 'Distancia al borde', 'Always on top': 'Siempre visible' }
+  'Distance from edge': 'Distancia al borde', 'Keep the dock open': 'Mantener el dock abierto', 'Always on top': 'Siempre visible' }
 const L = (s) => (menuLang === 'es' ? MENU_ES[s] ?? s : s)
 
 // ---- dock: the taskbar's pinned apps (shortcut files), launched through the shell
@@ -441,8 +443,9 @@ ipcMain.handle('dock:activate', async (_e, key) => {
   return winCmd(front ? `min ${front.hwnd}` : `front ${ws[0].hwnd}`)
 })
 // right-click on an app: its windows, open another, run as administrator, open file location, close; then the dock menu
-ipcMain.on('dock:appMenu', async (e, lnk, lang) => {
+ipcMain.on('dock:appMenu', async (e, lnk, lang, pinned) => {
   menuLang = lang
+  { const d = wins.find((x) => x.win.webContents === e.sender); if (d) d.pinned = pinned }
   const w = wins.find((x) => x.win.webContents === e.sender)
   const base = path.parse(lnk).name
   const a = lnk.startsWith('exe:') ? { name: base.charAt(0).toUpperCase() + base.slice(1), lnk: lnk.slice(4) } : dockApps().find((x) => x.lnk === lnk)
@@ -579,6 +582,9 @@ function dockMenuItems(w, stackName) {
     if (!r.canceled && p && !list.some((s) => s.path === p)) { list.push({ name: path.basename(p) || p, path: p }); saveStacks(list); refreshDocks() }
   }
   return [
+    // pinned: this dock stays out instead of hiding (the page keeps the pin, per dock)
+    { label: L('Keep the dock open'), type: 'checkbox', checked: !!w.pinned, click: () => w.win.webContents.send('dock:pin') },
+    { type: 'separator' },
     { label: L('Add stack…'), click: addStack },
     ...(stackName ? [{ label: `${L('Remove stack')} "${stackName}"`, click: () => { saveStacks(stacks().filter((s) => s.name !== stackName)); refreshDocks() } }] : []),
     { type: 'separator' },
@@ -596,9 +602,10 @@ function dockMenuItems(w, stackName) {
     } })) },
   ]
 }
-ipcMain.on('dock:menu', (e, stackName, lang) => {
+ipcMain.on('dock:menu', (e, stackName, lang, pinned) => {
   menuLang = lang
   const w = wins.find((x) => x.win.webContents === e.sender)
+  if (w) w.pinned = pinned
   if (w) Menu.buildFromTemplate(dockMenuItems(w, stackName)).popup({ window: w.win })
 })
 

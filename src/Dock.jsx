@@ -11,7 +11,11 @@ const STACK_ICONS = { Downloads: FolderDown, Documents: FileText, Pictures: Imag
 // After the pinned apps come the stacks (newest files of a folder, or Red = network drives) and the Recycle Bin.
 export default function Dock() {
   useLang()
-  const { open, enter, setOpen } = useSlider()
+  const { open, enter, setOpen, pinned, togglePin } = useSlider()
+  // "Keep the dock open" (its right-click menu): pinned, it comes out and stays
+  const pinRef = useRef(); pinRef.current = togglePin
+  useEffect(() => { window.art?.onDockPin(() => pinRef.current()) }, []) // once: the listener calls the latest toggle
+  useEffect(() => { if (pinned) setOpen(true) }, [pinned])
   const [apps, setApps] = useState([])
   const [stacks, setStacks] = useState([])
   const [stack, setStack] = useState(null) // { name, items }
@@ -123,7 +127,7 @@ export default function Dock() {
             onMouseDown={(e) => { if (it.pin && e.button === 0) drag.current = { key: it.key, from: apps.findIndex((a) => a.lnk === it.key), x: e.clientX, y: e.clientY } }}
             // a drag isn't a click (the click after a drop finds the drag already ended, so check the flag it leaves)
             onClick={() => { if (justDropped.current) return; it.run() }}
-            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); it.lnk ? window.art?.appMenu(it.lnk) : window.art?.dockMenu(it.stack) }}
+            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); it.lnk ? window.art?.appMenu(it.lnk, pinned) : window.art?.dockMenu(it.stack, pinned) }}
             // orange glow + ring on the icon under the cursor (and on an open stack)
             className={`relative flex shrink-0 items-center justify-center rounded-[22%] bg-card transition-[transform,box-shadow] duration-150 hover:shadow-[0_0_16px_rgba(232,101,10,.75)] hover:ring-1 hover:ring-accent ${it.active ? 'shadow-[0_0_16px_rgba(232,101,10,.75)] ring-1 ring-accent' : 'shadow-lg'} ${dragging ? 'z-10 ring-1 ring-accent shadow-[0_0_16px_rgba(232,101,10,.75)] !transition-none' : ''} ${dragDelta ? 'cursor-grabbing' : ''}`}
             style={{ width: tile, height: tile, transform: move }}>
@@ -168,7 +172,7 @@ export default function Dock() {
   return (
     // the strip always hugs its screen edge, whatever size the window is at that moment
     <div className={`flex h-full w-full ${vertical ? 'flex-row' : 'flex-col'} ${first ? 'justify-start' : 'justify-end'}`} onMouseEnter={enter}
-      onContextMenu={(e) => { e.preventDefault(); window.art?.dockMenu() }}>
+      onContextMenu={(e) => { e.preventDefault(); window.art?.dockMenu(undefined, pinned) }}>
       {open && (first ? <>{stripBox}{grid}</> : <>{grid}{stripBox}</>)}
     </div>
   )

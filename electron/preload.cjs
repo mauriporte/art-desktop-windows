@@ -14,9 +14,10 @@ contextBridge.exposeInMainWorld('art', {
   appWindows: () => ipcRenderer.invoke('dock:windows'),
   runningApps: () => ipcRenderer.invoke('dock:running'),
   // the native menus are drawn in the page's language (i18n.js keeps it in storage as "lang", default ES)
-  appMenu: (lnk) => ipcRenderer.send('dock:appMenu', lnk, lang()),
+  appMenu: (lnk, pinned) => ipcRenderer.send('dock:appMenu', lnk, lang(), pinned),
   widgetMenu: () => ipcRenderer.send('widget:menu', lang()),
-  dockMenu: (stackName) => ipcRenderer.send('dock:menu', stackName, lang()),
+  dockMenu: (stackName, pinned) => ipcRenderer.send('dock:menu', stackName, lang(), pinned),
+  onDockPin: (fn) => ipcRenderer.on('dock:pin', fn),
   stack: (name) => ipcRenderer.invoke('dock:stack', name),
   openFile: (p) => ipcRenderer.invoke('dock:open', p),
   stacks: () => ipcRenderer.invoke('dock:stacks'),
