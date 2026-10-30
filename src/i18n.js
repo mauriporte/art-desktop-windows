@@ -66,6 +66,9 @@ const ES = {
   Download: 'Bajada', Upload: 'Subida', 'Slow mode': 'Modo lento', Active: 'Activos', 'Nothing is downloading.': 'No se está descargando nada.', ETA: 'Quedan',
   downloading: 'Descargando', forcedDL: 'Descargando (forzado)', stalledDL: 'Atascado', queuedDL: 'En cola', metaDL: 'Buscando metadatos', uploading: 'Compartiendo', forcedUP: 'Compartiendo (forzado)', pausedDL: 'En pausa', stoppedDL: 'Detenido', checkingDL: 'Comprobando',
   'Tray icons (shows the taskbar for a moment)': 'Iconos de la bandeja (muestra la barra un momento)', More: 'Más',
+  'Dashboard (Ctrl+Alt+H)': 'Panel (Ctrl+Alt+H)', Edit: 'Editar', 'Done editing': 'Listo', 'Clickable again': 'Volver a poder pulsar', 'Click-through (clicks reach the windows behind)': 'Atravesable (los clics llegan a las ventanas de detrás)', notes: 'notas', Alarm: 'Alarma', 'No picture': 'Sin imagen', 'Nothing pending.': 'Nada pendiente.', Dismiss: 'Descartar', 'Mark as read': 'Marcar como leída', unread: 'sin leer', on: 'activos', online: 'en línea', Online: 'En línea', Offline: 'Sin conexión', 'Open pull requests': 'Pull requests abiertos', Open: 'Abierto', Repositories: 'Repositorios', Private: 'Privado', Public: 'Público', unsaved: 'sin guardar', 'not pushed': 'sin subir', 'Up to date': 'Al día', changed: 'cambiado hace', Asked: 'Pedido a', 'Lock editing': 'Bloquear la edición', 'Unlock editing': 'Desbloquear la edición', 'Pin (stays open behind your windows)': 'Fijar (se queda abierto detrás de tus ventanas)', 'Unpin (closes when you click outside)': 'Soltar (se cierra al pulsar fuera)', pending: 'pendientes', Calendar: 'Calendario', Tomorrow: 'Mañana', 'All day': 'Todo el día', 'Nothing in the next two weeks.': 'Nada en las próximas dos semanas.', running: 'en marcha', Running: 'En marcha', Stopped: 'Detenido', 'Tap again to confirm': 'Pulsa otra vez para confirmar', disarmed: 'Desarmada', armed_away: 'Armada (fuera)', armed_home: 'Armada (en casa)', armed_night: 'Armada (noche)', triggered: 'Disparada', 'Drag to resize': 'Arrastra para cambiar el tamaño', Name: 'Nombre', Size: 'Tamaño', Cancel: 'Cancelar', 'Add a tile': 'Añadir un mosaico',
+  'Search a light, switch, scene, sensor…': 'Busca una luz, interruptor, escena, sensor…',
+  'No tiles yet: press Edit, then + to add your lights, switches and scenes.': 'Aún no hay mosaicos: pulsa Editar y luego + para añadir luces, interruptores y escenas.',
   'Circle to Ask': 'Rodea y pregunta', 'Circle anything to ask about it · Esc: cancel': 'Rodea lo que quieras para preguntar · Esc: cancelar',
   'What is this?': '¿Qué es esto?', Ask: 'Preguntar',
   'Brain Map': 'Mapa mental', Search: 'Buscar', new: 'nuevas', 'in total': 'en total', 'on the map': 'en el mapa', finding: 'buscando', 'more places…': 'lugares más…',
@@ -85,6 +88,9 @@ export const locale = () => (lang === 'es' ? 'es-ES' : 'en-GB')
 export const t = (s) => (lang === 'es' ? house.es?.[s] ?? ES[s] ?? s : s).replace('{a}', house.jarvis?.name ?? 'the assistant')
 export function setLang(l) { lang = l; save('lang', l); dispatchEvent(new Event('langchange')) }
 addEventListener('storage', (e) => { if (e.key === 'lang' && e.newValue) { lang = e.newValue; dispatchEvent(new Event('langchange')) } })
+
+// light names written together ("LucesSalon") read as words; other names (servers, apps) stay as they are
+export const words = (s) => (/^(Luces|Luz)[A-ZÁÉÍÓÚÑ]/.test(s ?? '') ? s.replace(/([a-záéíóúñ])([A-ZÁÉÍÓÚÑ])/g, '$1 $2') : s)
 
 // re-renders the calling component (and so its children) when the language changes
 export function useLang() {

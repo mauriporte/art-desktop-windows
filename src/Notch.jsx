@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, ChevronsUp, Crop, Sparkles, Mic, Pin, PinOff, Settings2, Volume2, VolumeX, Cable, Unplug, MoonStar, Cast, MonitorUp, SlidersHorizontal, Wifi, WifiOff,
+import { ChevronLeft, ChevronRight, ChevronsUp, Crop, Sparkles, Layers, Mic, Pin, PinOff, Settings2, Volume2, VolumeX, Cable, Unplug, MoonStar, Cast, MonitorUp, SlidersHorizontal, Wifi, WifiOff,
   Bluetooth, BluetoothOff, Plane, PanelBottom, PanelBottomClose, Droplets, Wind, Shuffle, Sun, CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, CloudLightning } from 'lucide-react'
-import { Brain, Bot, Asterisk, ClipboardList, MonitorSmartphone, MonitorPlay, Lightbulb, Download, LayoutGrid, Power as PowerIcon, Smile } from 'lucide-react'
+import { CalendarDays, Brain, Bot, Asterisk, ClipboardList, MonitorSmartphone, MonitorPlay, Lightbulb, Download, LayoutGrid, Power as PowerIcon, Smile } from 'lucide-react'
 import Remote from './Remote.jsx'
 import Screens from './Screens.jsx'
 import HaView from './HaView.jsx'
@@ -13,6 +13,7 @@ import Dashboards from './Dashboards.jsx'
 import Clipboard from './Clipboard.jsx'
 import Power from './Power.jsx'
 import Ideas from './Ideas.jsx'
+import { CalendarTile } from './Overlay.jsx'
 import FlipClock, { useNow } from './FlipClock.jsx'
 import { describe, useWeather } from './weather.js'
 import { load, save, query, useSlider } from './slider.js'
@@ -29,7 +30,7 @@ const TABS = () => ({
   ...(house.torrents ? { Torrents: 'Torrents' } : {}),
   ...(house.dashboards ? { Dashboards: 'Dashboards' } : {}),
   ...(house.ideas ? { Ideas: 'Ideas' } : {}),
-  Clipboard: 'Clipboard', Power: 'Power',
+  Calendar: 'Calendar', Clipboard: 'Clipboard', Power: 'Power',
   Claude: 'Claude',
 })
 
@@ -42,7 +43,7 @@ const Cctv = mdi('M6.03 12.03L8.03 15.5L5.5 18.68L2 12.62L6.03 12.03M17 18V15.29
 // ("tabIcons": { <tab id>: "cctv" }); a tab with none gets a grid
 const ICONS = { lights: Lightbulb, cctv: Cctv, bot: Bot, smile: Smile, play: MonitorPlay, grid: LayoutGrid, brain: Brain, remote: RemoteTv }
 const TAB_ICONS = { Today: CloudSun, Controls: SlidersHorizontal, Remote: RemoteTv, Screens: MonitorSmartphone, Torrents: Download,
-  Dashboards: LayoutGrid, Ideas: Brain, Clipboard: ClipboardList, Power: PowerIcon, Claude: Asterisk }
+  Dashboards: LayoutGrid, Ideas: Brain, Calendar: CalendarDays, Clipboard: ClipboardList, Power: PowerIcon, Claude: Asterisk }
 const tabIcon = (id) => TAB_ICONS[id] ?? ICONS[house.tabIcons?.[id]] ?? LayoutGrid
 
 export function useCity() {
@@ -234,6 +235,8 @@ export default function Notch() {
   const tabRow = useRef(), wheelAt = useRef(0)
   const [tip, setTip] = useState(null) // { text, x, y } of the hovered tab
   const talkTab = Object.keys(house.tiles ?? {}).find((k) => house.tiles[k].talk)
+  // the dashboard overlay's assistant tile opens the talk card here
+  useEffect(() => { window.art?.overlay?.onTalk(() => { if (talkTab) { setTab(talkTab); save('tab', talkTab) } }) }, [])
   const [edges, setEdges] = useState({ l: false, r: false })
   const strip = () => tabRow.current?.firstChild
   const readEdges = () => { const el = strip(); if (!el) return; const l = el.scrollLeft > 1, r = el.scrollLeft + el.clientWidth < el.scrollWidth - 1; if (l !== edges.l || r !== edges.r) setEdges({ l, r }) }
@@ -273,6 +276,7 @@ export default function Notch() {
             </Sortable>
             </div>
             {edges.r && <button title={t('Next')} onClick={() => step(1)} className="rounded-full bg-card/80 p-1 text-muted hover:text-white"><ChevronRight size={16} /></button>}
+            <button title={t('Dashboard (Ctrl+Alt+H)')} className="rounded-full p-2 text-muted hover:text-white" onClick={() => window.art?.overlay.toggle()}><Layers size={16} /></button>
             <button title={t('Circle to Ask')} className="rounded-full p-2 text-muted hover:text-white" onClick={() => window.art?.grab.start('ask')}><Sparkles size={16} /></button>
             <button title={t('Screen grab')} className="rounded-full p-2 text-muted hover:text-white" onClick={() => window.art?.grab.start()}><Crop size={16} /></button>
             <button title={t('Tray icons (shows the taskbar for a moment)')} className="rounded-full p-2 text-muted hover:text-white"
@@ -313,7 +317,7 @@ export default function Notch() {
             </button>
           </div>
           <div className="min-h-0 flex-1">
-            {tab === 'Today' ? <Today city={city} setCity={setCity} /> : tab === 'Controls' ? <Controls radios={radios} /> : tab === 'Remote' ? <Remote /> : tab === 'Screens' ? <Screens /> : tab === 'Claude' ? <ClaudeTab /> : tab === 'Torrents' ? <Torrents /> : tab === 'Dashboards' ? <Dashboards /> : tab === 'Clipboard' ? <Clipboard /> : tab === 'Power' ? <Power /> : tab === 'Ideas' ? <Ideas /> : house.tiles?.[tab] ? <HaTiles key={tab} tab={tab} /> : house.views?.[tab] ? <HaView key={tab} path={house.views[tab]} /> : null}
+            {tab === 'Today' ? <Today city={city} setCity={setCity} /> : tab === 'Controls' ? <Controls radios={radios} /> : tab === 'Remote' ? <Remote /> : tab === 'Screens' ? <Screens /> : tab === 'Claude' ? <ClaudeTab /> : tab === 'Torrents' ? <Torrents /> : tab === 'Dashboards' ? <Dashboards /> : tab === 'Clipboard' ? <Clipboard /> : tab === 'Power' ? <Power /> : tab === 'Ideas' ? <Ideas /> : tab === 'Calendar' ? <CalendarTile /> : house.tiles?.[tab] ? <HaTiles key={tab} tab={tab} /> : house.views?.[tab] ? <HaView key={tab} path={house.views[tab]} /> : null}
           </div>
         </div>
       )}

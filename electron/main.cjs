@@ -1,4 +1,4 @@
-const { app, BrowserWindow, screen, ipcMain, clipboard, webFrameMain, shell, Menu, nativeImage, dialog } = require('electron')
+const { app, BrowserWindow, screen, ipcMain, clipboard, webFrameMain, shell, Menu, nativeImage, dialog, globalShortcut } = require('electron')
 const { execFile } = require('child_process')
 const fs = require('fs')
 const path = require('path')
@@ -9,6 +9,7 @@ const house = require('./house.cjs')
 const grab = require('./grab.cjs')
 const receiver = require('./receiver.cjs')
 const ideas = require('./ideas.cjs')
+const projects = require('./projects.cjs')
 ideas.setup({ house })
 
 // Three auto-hiding glass windows: the notch (top centre of every screen), the side panel (right edge of the rightmost
@@ -242,7 +243,8 @@ ipcMain.handle('house:get', () => house())
 ipcMain.handle('ha:states', wrap((ids) => remote.haStates(ids)))
 ipcMain.handle('ha:camera', wrap((id) => remote.haCamera(id)))
 // only the services the tiles use, on entities of these domains
-const CALLS = { switch: ['toggle'], light: ['toggle'], select: ['select_option'], button: ['press'],
+const CALLS = { switch: ['toggle'], light: ['toggle', 'turn_off'], input_button: ['press'], input_boolean: ['toggle'], fan: ['toggle'], scene: ['turn_on'], script: ['turn_on'],
+  cover: ['toggle'], lock: ['lock', 'unlock'], automation: ['trigger'], select: ['select_option'], button: ['press'],
   media_player: ['media_play_pause', 'media_next_track', 'media_previous_track', 'volume_set'] }
 ipcMain.handle('ha:torrents', wrap(() => remote.haTorrents()))
 ipcMain.handle('ha:music', () => remote.haMusic())
@@ -264,7 +266,9 @@ ipcMain.handle('ha:image', wrap((p) => {
   return remote.haImage(p)
 }))
 ipcMain.handle('ha:call', wrap((domain, service, data) => {
-  if (!CALLS[domain]?.includes(service) || !String(data?.entity_id).startsWith(domain + '.')) throw new Error('Not allowed')
+  // "all" only to switch every light off (the dashboard's all-lights-off tile)
+  const all = domain === 'light' && service === 'turn_off' && data?.entity_id === 'all'
+  if (!CALLS[domain]?.includes(service) || (!all && !String(data?.entity_id).startsWith(domain + '.'))) throw new Error('Not allowed')
   return remote.haCall(domain, service, data)
 }))
 ipcMain.handle('remote:devices',wrap(() => remote.devices()))
@@ -607,7 +611,10 @@ ipcMain.handle('claude:detail', (_e, id) => claude.detail(String(id)))
 // sends the user's exact words to that session (live session-to-session messaging, so the Claude app shows it at once).
 // No session is kept (--no-session-persistence), no user settings or MCP servers load, and it runs once: no retries.
 const RELAY_DIR = path.join(require('os').homedir(), '.config', 'art-desktop', 'relay')
-ipcMain.handle('claude:reply', wrap((session, text) => new Promise((resolve, reject) => {
+ipcMain.handle('claude:reply', wrap((session, text) => relay(session, text)))
+// the dashboard's request tiles (e.g. a new Home Info): the same relay, to a session named in the tile
+ipcMain.handle('overlay:relay', wrap((session, text) => relay(session, text)))
+function relay(session, text) { return new Promise((resolve, reject) => {
   fs.mkdirSync(RELAY_DIR, { recursive: true })
   const cli = [path.join(require('os').homedir(), '.local', 'bin', 'claude.exe'), 'claude'].find((c) => c === 'claude' || fs.existsSync(c))
   const prompt = `Use SendMessage to send a message to the Claude session whose name is exactly "${session}" (find it with ListAgents ` +
@@ -621,7 +628,7 @@ ipcMain.handle('claude:reply', wrap((session, text) => new Promise((resolve, rej
       if (j.result && !j.is_error) resolve(j.result.trim())
       else reject(new Error(String(j.subtype || err?.message || 'no answer').slice(0, 160)))
     })
-})))
+}) }
 function claudeChanged() {
   const st = claude.state()
   for (const w of wins) {
@@ -696,6 +703,86 @@ const POWER = {
   shutdown: ['shutdown.exe', ['/s', '/t', '0']],
 }
 ipcMain.handle('power:do', (_e, what) => { const p = POWER[what]; if (p) execFile(p[0], p[1], { windowsHide: true }) })
+
+// ---- dashboard overlay: a see-through full-screen layer of glass HA tiles, turned on and off from the
+// notch button or Ctrl+Alt+H; it opens on the screen with the cursor. Its tiles are ~/.config/art-desktop/overlay.json
+// ([{ entity, name? }]), added, removed and arranged inside it.
+const OVERLAY = path.join(require('os').homedir(), '.config', 'art-desktop', 'overlay.json')
+let overlayWin = null
+// pinned (overlay.json "pinned"): it stays open behind the other windows, like a desktop layer, and comes back when
+// the app starts; unpinned it floats on top and closes when you're done
+const overlayConf = () => { try { const d = JSON.parse(fs.readFileSync(OVERLAY, 'utf8')); return Array.isArray(d) ? { tiles: d } : d } catch { return { tiles: [] } } }
+function pinOverlay(on) {
+  if (!overlayWin || overlayWin.isDestroyed()) return
+  overlayWin.setAlwaysOnTop(!on, 'floating')
+  if (on) winCmd(`bottom ${overlayWin.getNativeWindowHandle().readBigInt64LE(0)}`)
+}
+function toggleOverlay() {
+  if (overlayWin && !overlayWin.isDestroyed()) { overlayWin.close(); return }
+  const b = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds
+  overlayWin = new BrowserWindow({ ...b, frame: false, transparent: true, hasShadow: false, resizable: false, movable: false, skipTaskbar: true,
+    alwaysOnTop: true, show: false, roundedCorners: false, thickFrame: false, backgroundColor: '#00000000',
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs') } })
+  overlayWin.setAlwaysOnTop(true, 'floating')
+  overlayWin.setBounds(b)
+  overlayWin.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), { query: { view: 'overlay' } })
+  overlayWin.once('ready-to-show', () => { overlayWin.show(); if (overlayConf().pinned) pinOverlay(true); else overlayWin.focus() })
+  overlayWin.on('blur', () => overlayConf().pinned && pinOverlay(true)) // pinned: back behind the windows after a click
+}
+ipcMain.on('overlay:pin', (_e, on) => { const d = overlayConf(); d.pinned = !!on; fs.writeFileSync(OVERLAY, JSON.stringify(d, null, 1)); pinOverlay(!!on) })
+app.whenReady().then(() => { if (overlayConf().pinned) setTimeout(toggleOverlay, 3000) })
+ipcMain.on('overlay:toggle', toggleOverlay)
+// click-through: the dashboard lets clicks pass to the windows behind, except over its own click-through button (so it
+// can be switched back): the cursor is watched and the window takes clicks only while the cursor is on that button
+let through = false, throughSpot = null
+ipcMain.on('overlay:through', (_e, on) => { through = !!on; if (overlayWin && !overlayWin.isDestroyed()) overlayWin.setIgnoreMouseEvents(through) })
+ipcMain.on('overlay:throughSpot', (_e, r) => { throughSpot = r })
+setInterval(() => {
+  if (!through || !throughSpot || !overlayWin || overlayWin.isDestroyed() || !app.isReady()) return
+  const p = screen.getCursorScreenPoint(), r = throughSpot
+  overlayWin.setIgnoreMouseEvents(!(p.x >= r.x && p.x < r.x + r.width && p.y >= r.y && p.y < r.y + r.height))
+}, 100)
+// an imported navigation tile: that HA page in the browser (paths inside HA only)
+ipcMain.on('overlay:openHa', (_e, p) => { const url = remote.haUrl(); if (url && /^\/[\w\-/?=&.]*$/.test(String(p))) shell.openExternal(url + p) })
+// the voice assistant tile: the overlay closes and the notch on that screen opens its talk card
+ipcMain.on('overlay:talk', () => {
+  if (overlayWin && !overlayWin.isDestroyed()) overlayWin.close()
+  const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  const w = wins.find((x) => x.kind === 'notch' && x.display.id === d.id)
+  if (w) { place(w, true); w.win.webContents.send('notch:opened'); w.win.webContents.send('notch:talk') }
+})
+ipcMain.handle('overlay:tiles', () => overlayConf())
+ipcMain.handle('overlay:save', (_e, list) => {
+  // { tiles: [...], servers: [...] }; navigation tiles have no entity
+  if (!Array.isArray(list?.tiles) || !list.tiles.every((x) => typeof (x?.entity ?? x?.nav) === 'string')) return
+  fs.mkdirSync(path.dirname(OVERLAY), { recursive: true }); fs.writeFileSync(OVERLAY, JSON.stringify(list, null, 1))
+})
+ipcMain.handle('ha:entities', wrap(() => remote.haEntities()))
+ipcMain.handle('ha:calendars', wrap(() => remote.haCalendars()))
+ipcMain.handle('projects:list', wrap(() => projects.list()))
+ipcMain.handle('ha:todoItems', wrap((e) => { if (!/^todo\.\w+$/.test(e)) throw new Error('Not allowed'); return remote.haTodoItems(e) }))
+ipcMain.handle('ha:todoDone', wrap((e, uid) => { if (!/^todo\.\w+$/.test(e)) throw new Error('Not allowed'); return remote.haTodoDone(e, String(uid)) }))
+ipcMain.handle('ha:notifications', wrap(() => remote.haNotifications()))
+// a folder of the notes vault as a tree (the dashboard's notes tile): folders and Markdown notes, nothing outside the vault
+ipcMain.handle('notes:tree', wrap((folder) => {
+  const vault = house().ideas?.vault
+  if (!vault) throw new Error('No vault in house.json (ideas.vault)')
+  const root = path.resolve(vault, String(folder))
+  if (!root.startsWith(path.resolve(vault))) throw new Error('Not allowed')
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).filter((f) => !f.name.startsWith('.'))
+    .map((f) => f.isDirectory() ? { name: f.name, path: path.join(dir, f.name), children: walk(path.join(dir, f.name)) }
+      : f.name.endsWith('.md') ? { name: f.name.slice(0, -3), path: path.join(dir, f.name) } : null)
+    .filter(Boolean).sort((a, b) => (!!b.children - !!a.children) || a.name.localeCompare(b.name))
+  return walk(root)
+}))
+ipcMain.on('notes:open', (_e, p) => { const v = house().ideas?.vault; if (v && path.resolve(String(p)).startsWith(path.resolve(v))) shell.openExternal(`obsidian://open?path=${encodeURIComponent(p)}`) })
+ipcMain.handle('ha:dismiss', wrap((id) => remote.haDismiss(String(id))))
+ipcMain.handle('ha:events', wrap((ids, start, end) => remote.haEvents(ids, start, end)))
+// link tiles: a web address (http/https only), or one of the dock's apps by name (e.g. the mail client)
+ipcMain.on('overlay:openUrl', (_e, url) => { if (/^(https?:\/\/|obsidian:\/\/open\?)/i.test(String(url))) shell.openExternal(url) }) // web pages, or an Obsidian note
+ipcMain.on('overlay:openApp', (_e, name) => { const a = dockApps().find((x) => x.name === name); if (a) shell.openPath(a.lnk) })
+app.whenReady().then(() => globalShortcut.register('Control+Alt+H', toggleOverlay))
+app.on('will-quit', () => globalShortcut.unregisterAll())
 
 // screen grabber (grab.cjs): our sliders hide while the screens are captured
 grab.setup({

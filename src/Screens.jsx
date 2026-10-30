@@ -42,9 +42,10 @@ function VncForm({ done }) {
   )
 }
 
-export default function Screens() {
+// only = one mode, without the mode chips (the dashboard's ADB / Stream panels)
+export default function Screens({ only }) {
   // the modes this house has: ADB Control / Stream Control need adbControl, VNC needs vnc
-  const modes = [...(house.adbControl ? ['ADB', 'Stream'] : []), ...(house.vnc ? ['VNC'] : [])]
+  const modes = only ? [only] : [...(house.adbControl ? ['ADB', 'Stream'] : []), ...(house.vnc ? ['VNC'] : [])]
   const [mode, setMode] = useState(modes[0])
   const [devs, setDevs] = useState(null)
   const [error, setError] = useState('')

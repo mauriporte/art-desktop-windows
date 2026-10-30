@@ -128,6 +128,35 @@ async function haTorrents() {
   return Object.values(all).flatMap((ts) => Object.entries(ts).map(([name, x]) => ({ ...x, name })))
 }
 
+// what the dashboard overlay can show: every entity of the domains its tiles handle, for its "add a tile" search
+const OVERLAY_DOMAINS = ['light', 'switch', 'input_boolean', 'fan', 'scene', 'script', 'button', 'sensor', 'binary_sensor', 'cover', 'lock', 'climate']
+async function haEntities() {
+  const all = await (await haGet('/api/states')).json()
+  return all.filter((s) => OVERLAY_DOMAINS.includes(s.entity_id.split('.')[0]))
+    .map((s) => ({ id: s.entity_id, name: s.attributes.friendly_name || s.entity_id })).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+// calendars (the overlay's calendar tile): HA's list, and each chosen calendar's events between two times
+async function haCalendars() { return (await haGet('/api/calendars')).json() }
+async function haEvents(ids, start, end) {
+  const lists = await Promise.all(ids.filter((id) => /^calendar\.[\w]+$/.test(id)).map(async (id) =>
+    ((await (await haGet(`/api/calendars/${id}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`)).json()) ?? []).map((e) => ({ ...e, calendar: id }))))
+  return lists.flat()
+}
+
+// to-do lists and notifications (the dashboard's Listas / Notificaciones panels)
+async function haTodoItems(entity) {
+  const h = ha()
+  if (!h.ok) throw new Error('No HA token yet')
+  const r = await fetch(`${h.url}/api/services/todo/get_items?return_response`, { method: 'POST', signal: AbortSignal.timeout(10000),
+    headers: { Authorization: `Bearer ${h.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ entity_id: entity, status: 'needs_action' }) })
+  if (!r.ok) throw new Error(`HA ${r.status}`)
+  return (await r.json()).service_response?.[entity]?.items ?? []
+}
+const haTodoDone = (entity, uid) => haCall('todo', 'update_item', { entity_id: entity, item: uid, status: 'completed' })
+const haNotifications = () => haWs({ type: 'persistent_notification/get' })
+const haDismiss = (id) => haCall('persistent_notification', 'dismiss', { notification_id: id })
+
 async function haStates(ids) {
   const all = await (await haGet('/api/states')).json()
   const want = new Set(ids)
@@ -138,7 +167,7 @@ const tile = (s) => ({
     options: s.attributes.options, picture: s.attributes.entity_picture, last_answer_by: s.attributes.last_answer_by,
     title: s.attributes.media_title, artist: s.attributes.media_artist, volume: s.attributes.volume_level,
     album: s.attributes.media_album_name, position: s.attributes.media_position, duration: s.attributes.media_duration,
-    positionAt: s.attributes.media_position_updated_at })
+    positionAt: s.attributes.media_position_updated_at, group: Array.isArray(s.attributes.entity_id) || undefined })
 
 // the house's player in use, for the media widget's "remote" side: playing, else paused (the music one first in each),
 // else a TV that is on with an app open (the Android TV remote can't tell playing from paused), else the music one
@@ -231,4 +260,4 @@ async function haAskImage(png, question) {
   } finally { haWs({ type: 'media_source/local_source/remove', media_content_id: id }).catch(() => {}) }
 }
 
-module.exports = { haAskImage, jrStore, jrSave, haUrl, haStates, haTorrents, haNowPlaying, jrNow, jrMedia, haCamera, haImage, haMusic, haCall, vnc, vncAdd, vncRemove, devices, press, text, link, openOnTv, jrPairStart, jrPairFinish, jrSign, REMOTE_KEYS, JR_KEYS }
+module.exports = { haTodoItems, haTodoDone, haNotifications, haDismiss, haCalendars, haEvents, haEntities, haAskImage, jrStore, jrSave, haUrl, haStates, haTorrents, haNowPlaying, jrNow, jrMedia, haCamera, haImage, haMusic, haCall, vnc, vncAdd, vncRemove, devices, press, text, link, openOnTv, jrPairStart, jrPairFinish, jrSign, REMOTE_KEYS, JR_KEYS }

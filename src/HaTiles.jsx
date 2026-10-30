@@ -3,7 +3,7 @@ import { Camera, RotateCcw, BatteryMedium, Circle } from 'lucide-react'
 import JarvisTalk from './JarvisTalk.jsx'
 import Sortable from './Sortable.jsx'
 import { house } from './house.js'
-import { t as tr, ago } from './i18n.js'
+import { t as tr, ago, words } from './i18n.js'
 
 const ha = (op, ...a) => window.art?.ha(op, ...a) ?? Promise.resolve({ error: 'Not running in the app' })
 
@@ -75,7 +75,7 @@ function EntityTile({ t, s, flash, refresh }) {
       <div className="flex items-center gap-3">
         {Icon && domain !== 'button' && <Icon size={18} className="text-accent" />}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold">{tr(t.name)}</div>
+          <div className="truncate text-sm font-semibold">{words(tr(t.name))}</div>
           <div className="truncate text-xs text-muted">{sub}</div>
         </div>
         {right}
