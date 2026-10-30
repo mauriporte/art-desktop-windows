@@ -1,0 +1,3 @@
+Mac Dark: one dark-tile style for every dock app (A.R.T., 30/10/2026).
+Brand logos: Simple Icons (CC0, https://simpleicons.org). Other symbols: Phosphor Icons (MIT, https://phosphoricons.com).
+Tile: 480 px, 22 % corners, vertical gradient tinted by the symbol colour into #0e0e0e.

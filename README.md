@@ -72,7 +72,7 @@ taskbar back), then delete the folder.
 | `ha.json` | Home Assistant address and token (never commit it anywhere) |
 | `remotes.json` | Devices for the Remote tab |
 | `dock.json`, `stacks.json` | Dock edges, order, pins, icon pack, stacks |
-| `icon-packs/<name>/` | Optional icon packs (PNG/SVG named after the app, or a `map.json`) |
+| `icon-packs/<name>/` | Icon packs (PNG/SVG named after the app, or a `map.json`); Mac Dark ships with the app and is the default |
 
 ## Optional
 
@@ -86,6 +86,14 @@ taskbar back), then delete the folder.
 
 `npm run build` builds the page into `dist/`; `node_modules\electron\dist\electron.exe .` runs it.
 `--open=notch|panel|dock --tab=<name>` starts a window already open, for checking layouts.
+
+## Credits
+
+The dock's default icon pack, **Mac Dark** (`icon-packs/Mac Dark`), puts every app's own symbol on the same dark tile:
+brand logos from [Simple Icons](https://simpleicons.org) (CC0; the logos stay their owners' trademarks) and the other
+symbols from [Phosphor Icons](https://phosphoricons.com) (MIT). Details in `icon-packs/Mac Dark/LICENSE.txt`. Add your
+own apps to it by dropping an SVG or PNG in the folder and naming it in its `map.json`, or make a pack of your own next
+to it (right-click the dock → Icon pack).
 
 ## License
 

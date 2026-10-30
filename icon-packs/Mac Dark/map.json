@@ -1,0 +1,23 @@
+{
+  "Advanced SystemCare": "shield-check.svg",
+  "Beeper": "chats-circle.svg",
+  "Claude": "claude.svg",
+  "Computer Management": "desktop-tower.svg",
+  "Control Panel": "sliders-horizontal.svg",
+  "Disk Cleanup": "broom.svg",
+  "FanControl": "fan.svg",
+  "File Explorer": "folder.svg",
+  "Home Assistant": "homeassistant.svg",
+  "Jellyfin Media Player": "jellyfin.svg",
+  "Magnify": "magnifying-glass-plus.svg",
+  "Obsidian": "obsidian.svg",
+  "On-Screen Keyboard": "keyboard.svg",
+  "PuTTY": "terminal-window.svg",
+  "Spotify": "spotify.svg",
+  "Stremio": "stremio.svg",
+  "Tailscale": "tailscale.svg",
+  "Task Manager": "chart-line.svg",
+  "Thunderbird": "thunderbird.svg",
+  "Vivaldi": "vivaldi.svg",
+  "VLC media player": "vlcmediaplayer.svg"
+}

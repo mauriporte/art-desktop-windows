@@ -19,7 +19,9 @@ call npm run build || (echo Build failed. & pause & exit /b 1)
 rem settings: an example house file on first install (the Home Assistant token goes in ha.json, which you create)
 set "CFG=%USERPROFILE%\.config\art-desktop"
 if not exist "%CFG%" mkdir "%CFG%"
-if not exist "%CFG%\house.json" copy /y "config\house.example.json" "%CFG%\house.json" >nul
+if not exist "%CFG%\house.json" copy /y "config\house.example.json" "%CFG%\house.json" >nul
+rem the icon packs that ship with the app (Mac Dark: the dock's default look); yours in the same folder stay
+xcopy /e /i /y "icon-packs" "%CFG%\icon-packs" >nul
 call "%~dp0install-startup.cmd"
 echo.
 echo Done. A.R.T. Desktop starts with Windows.

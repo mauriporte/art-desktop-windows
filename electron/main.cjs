@@ -348,7 +348,8 @@ const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 const dockConf = () => { try { return JSON.parse(fs.readFileSync(DOCK_CONF, 'utf8')) } catch { return {} } }
 const packs = () => { try { return fs.readdirSync(PACKS, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name) } catch { return [] } }
 function packIcon(appName) {
-  const pack = dockConf()._iconPack
+  // the chosen pack; none chosen yet = Mac Dark, the pack that ships with the app ("" = the system's own icons)
+  const pack = dockConf()._iconPack ?? 'Mac Dark'
   if (!pack) return ''
   const dir = path.join(PACKS, pack)
   let file
@@ -551,7 +552,7 @@ function setOwnPins(list) {
 function setPack(p) {
   const conf = dockConf()
   if (p) conf._iconPack = p
-  else delete conf._iconPack
+  else conf._iconPack = '' // system icons, chosen on purpose
   fs.mkdirSync(path.dirname(DOCK_CONF), { recursive: true })
   fs.writeFileSync(DOCK_CONF, JSON.stringify(conf, null, 1))
   refreshDocks()
@@ -591,8 +592,8 @@ function dockMenuItems(w, stackName) {
     ...Object.keys(label).map((k) => ({ label: `${L('Dock')}: ${L(label[k])}`, type: 'radio', checked: k === w.edge, click: () => set(k) })),
     { type: 'separator' },
     { label: L('Icon pack'), submenu: [
-      { label: L('System icons'), type: 'radio', checked: !dockConf()._iconPack, click: () => setPack(null) },
-      ...packs().map((p) => ({ label: p, type: 'radio', checked: dockConf()._iconPack === p, click: () => setPack(p) })),
+      { label: L('System icons'), type: 'radio', checked: dockConf()._iconPack === '', click: () => setPack(null) },
+      ...packs().map((p) => ({ label: p, type: 'radio', checked: (dockConf()._iconPack ?? 'Mac Dark') === p, click: () => setPack(p) })),
       { type: 'separator' },
       { label: L('Open icon packs folder'), click: () => { fs.mkdirSync(PACKS, { recursive: true }); shell.openPath(PACKS) } },
     ] },
