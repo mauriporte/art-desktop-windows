@@ -34,15 +34,15 @@ ask about it: a local Ollama vision model, Claude through the Claude Code CLI, o
 a tray button, and a mic for your Home Assistant voice assistant.
 
 **Dock** (one per screen, any edge). Your taskbar's pinned apps plus its own pins ("Keep in dock"), running apps, stacks
-of recent files (Downloads, Documents, Pictures, network drives, any folder), the Recycle Bin and the taskbar switch.
+of recent files (Downloads, Documents, Pictures, network drives, any folder; each shows as a grid or a list), the Recycle Bin, Search, All desktops (Windows' Task View), an administrator terminal and the taskbar switch (those last four drag like the apps).
 Magnify wave on hover, drag icons to reorder, right-click for windows, run as administrator, file location and
 dock settings (edge, icon pack, distance from the edge).
 
-**Side panel** (top-right corner of the right-most screen): Music, Weather and Remote. Pinned it's frosted glass;
+**Side panel** (top-right corner of the right-most screen): Music (what plays on this PC), Weather and Remote. Pinned it's frosted glass;
 unpinned it floats.
 
-**Media slide-in** (top-left corner): what's playing on this PC (Windows media controls), on your paired devices
-(Joint Remote) or in Home Assistant, with the real play/pause state, cover art and timers.
+**Media slide-in** (top-left corner): what's playing outside this PC, on your paired devices (Joint Remote) or in Home
+Assistant, with the real play/pause state, cover art and timers. It and the panel's Music are controlled separately.
 
 **Joint Remote receiver**: your phones and tablets can control this PC (now playing, media and arrow keys, volume,
 typing, links). It announces itself on the local network; pairing shows a 6-digit code as a Windows notification.

@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('art', {
   stack: (name) => ipcRenderer.invoke('dock:stack', name),
   openFile: (p) => ipcRenderer.invoke('dock:open', p),
   stacks: () => ipcRenderer.invoke('dock:stacks'),
+  dockTool: (name) => ipcRenderer.invoke('dock:tool', name),
   onDockChanged: (fn) => ipcRenderer.on('dock:changed', fn),
   showTray: () => ipcRenderer.invoke('tray:show'),
   getTaskbarHidden: () => ipcRenderer.invoke('taskbar:get'),

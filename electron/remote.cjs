@@ -170,9 +170,12 @@ const tile = (s) => ({
     positionAt: s.attributes.media_position_updated_at, group: Array.isArray(s.attributes.entity_id) || undefined })
 
 // the house's player in use, for the media widget's "remote" side: playing, else paused (the music one first in each),
-// else a TV that is on with an app open (the Android TV remote can't tell playing from paused), else the music one
-async function haNowPlaying() {
-  const all = (await (await haGet('/api/states')).json()).filter((s) => s.entity_id.startsWith('media_player.'))
+// else a TV that is on with an app open (the Android TV remote can't tell playing from paused), else the music one.
+// here = what this PC plays { title, playing, spotify }: HA sees that too, so the players showing it are left out
+async function haNowPlaying(here) {
+  const own = (s) => here && ((here.spotify && here.playing && s.entity_id === haMusic())
+    || (s.attributes.media_title?.toLowerCase() === here.title?.toLowerCase() && (here.playing || s.state !== 'playing')))
+  const all = (await (await haGet('/api/states')).json()).filter((s) => s.entity_id.startsWith('media_player.') && !own(s))
   const music = all.find((s) => s.entity_id === haMusic())
   const list = [music, ...all].filter(Boolean)
   const s = list.find((x) => x.state === 'playing') || list.find((x) => x.state === 'paused')

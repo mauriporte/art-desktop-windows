@@ -32,7 +32,7 @@ const KINDS = {
     // shape (dockShape) shows just the strip until a stack opens
     size: (b, edge) => {
       const along = (edge === 'left' || edge === 'right' ? b.height : b.width) - 40
-      const len = Math.min((dockApps().length + extraApps + stacks().length + 2) * DOCK_STEP + 80, along) // apps + open unpinned apps + stacks + trash + taskbar switch
+      const len = Math.min((dockApps().length + extraApps + stacks().length + 5) * DOCK_STEP + 80, along) // apps + open unpinned apps + stacks + trash + the 4 DOCK_TOOLS
       const thick = DOCK_THICK + STACK_GRID
       return edge === 'left' || edge === 'right' ? { w: thick, h: Math.max(len, 480), len } : { w: Math.max(len, 560), h: thick, len }
     },
@@ -262,7 +262,7 @@ ipcMain.handle('ha:music', () => remote.haMusic())
 // ask HA to re-read the music player now (its Spotify integration otherwise only checks every few seconds)
 ipcMain.handle('ha:musicRefresh', wrap(() => remote.haMusic() && remote.haCall('homeassistant', 'update_entity', { entity_id: remote.haMusic() })))
 // the media widget: what plays on this PC (Windows' media controls) first, then my devices (Joint Remote), then HA's players
-ipcMain.handle('ha:nowPlaying', wrap(() => remote.haNowPlaying()))
+ipcMain.handle('ha:nowPlaying', wrap((here) => remote.haNowPlaying(here)))
 ipcMain.handle('ha:devicesNow', wrap(() => remote.jrNow()))
 ipcMain.handle('ha:deviceKey', wrap((host, key) => remote.jrMedia(host, key)))
 ipcMain.handle('ha:local', () => winCmd('media'))
@@ -321,9 +321,10 @@ const L = (s) => (menuLang === 'es' ? MENU_ES[s] ?? s : s)
 
 // ---- dock: the taskbar's pinned apps (shortcut files), launched through the shell
 const PINS = path.join(app.getPath('appData'), 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar')
+const dockRank = () => { const order = dockConf()._order ?? []; return (a) => { const i = order.indexOf(a.name); return i < 0 ? order.length : i } }
 function dockApps() {
   // the user's order (dragged in the dock, "_order" in dock.json); apps not in it keep Windows' order after them
-  const order = dockConf()._order ?? [], rank = (a) => { const i = order.indexOf(a.name); return i < 0 ? order.length : i }
+  const rank = dockRank()
   let pinned = []
   try { pinned = fs.readdirSync(PINS).filter((f) => f.toLowerCase().endsWith('.lnk')).map((f) => ({ name: f.slice(0, -4), lnk: path.join(PINS, f) })) } catch {}
   // the dock's own pins ("Keep in dock" on an open app; Windows 11 lets no app pin to the taskbar): "_pins" in dock.json,
@@ -341,10 +342,11 @@ ipcMain.handle('dock:apps', async () => {
   const stale = apps.filter((a) => { try { return fs.statSync(iconFile(a.lnk)).mtimeMs < fs.statSync(a.lnk).mtimeMs } catch { return true } })
   if (stale.length) await new Promise((res) => execFile('powershell.exe', ['-NoProfile', '-File', path.join(__dirname, 'dock-icons.ps1'), ICONS, ...stale.map((a) => a.lnk)],
     { windowsHide: true, timeout: 60000 }, res))
-  return apps.map((a) => {
+  const tools = Object.keys(DOCK_TOOLS).map((name) => ({ name, lnk: 'tool:' + name, tool: true })), rank = dockRank()
+  return [...apps, ...tools].sort((a, b) => rank(a) - rank(b)).map((a) => {
     let icon = packIcon(a.name)
     const fromPack = !!icon // pack icons are already Mac-style squircles: drawn full-tile
-    try { icon ||= 'data:image/png;base64,' + fs.readFileSync(iconFile(a.lnk)).toString('base64') } catch {}
+    if (!a.tool) try { icon ||= 'data:image/png;base64,' + fs.readFileSync(iconFile(a.lnk)).toString('base64') } catch {}
     return { ...a, icon, fromPack }
   })
 })
@@ -377,7 +379,7 @@ ipcMain.handle('dock:order', (_e, names) => {
   const conf = dockConf(); conf._order = names
   fs.writeFileSync(DOCK_CONF, JSON.stringify(conf, null, 1)); refreshDocks()
 })
-ipcMain.handle('dock:launch', (_e, lnk) => dockApps().some((a) => a.lnk === lnk) && shell.openPath(lnk))
+ipcMain.handle('dock:launch', (_e, lnk) => dockApps().some((a) => a.lnk === lnk) && openApp(lnk))
 
 // ---- running apps: windows.ps1 runs for the app's lifetime and lists / restores / minimizes / closes windows
 let winHelper = null, winQueue = Promise.resolve()
@@ -434,7 +436,7 @@ ipcMain.handle('dock:running', async () => {
   if (fresh.length) await new Promise((res) => execFile('powershell.exe', ['-NoProfile', '-File', path.join(__dirname, 'dock-icons.ps1'), path.join(ICONS, 'exe'), ...fresh],
     { windowsHide: true, timeout: 60000 }, res))
   return Promise.all(keys.map(async (k) => {
-    const exe = k.slice(4), base = path.parse(exe).name, name = base.charAt(0).toUpperCase() + base.slice(1)
+    const exe = k.slice(4), base = path.parse(exe).name, name = SETTINGS_HOST.test(base) ? 'Settings' : base.charAt(0).toUpperCase() + base.slice(1)
     let icon = packIcon(name)
     const fromPack = !!icon
     try { icon ||= 'data:image/png;base64,' + fs.readFileSync(path.join(ICONS, 'exe', base + '.png')).toString('base64') } catch {}
@@ -444,11 +446,15 @@ ipcMain.handle('dock:running', async () => {
 })
 ipcMain.handle('dock:windows', async () => Object.fromEntries(Object.entries(await appWindows()).map(([k, ws]) => [k, ws.map((w) => ({ min: w.min, fg: w.fg }))])))
 // what a dock key starts: a pinned shortcut, or an open app's exe
+// shortcut: Settings is the one app taken to run in Windows' shared window host (ApplicationFrameHost); another hosted app
+// (Calculator...) would show as Settings too, resolve the hosted app's own id if one is ever used here
+const SETTINGS_HOST = /applicationframehost(\.exe)?$/i
+const openApp = (p) => SETTINGS_HOST.test(p) ? shell.openExternal('ms-settings:') : shell.openPath(p)
 const launchable = (key) => key.startsWith('exe:') ? key.slice(4) : dockApps().some((a) => a.lnk === key) && key
 // a click on an app: launch it; or minimize its window in front; or bring back its top window (restoring a minimized one)
 ipcMain.handle('dock:activate', async (_e, key) => {
   const ws = (await appWindows())[key]
-  if (!ws) return launchable(key) && shell.openPath(launchable(key))
+  if (!ws) return launchable(key) && openApp(launchable(key))
   // a minimized window can still be Windows' foreground one (the dock never takes focus), so it doesn't count as in front
   const front = ws.find((w) => w.fg && !w.min)
   return winCmd(front ? `min ${front.hwnd}` : `front ${(ws.find((w) => w.fg) ?? ws[0]).hwnd}`)
@@ -467,7 +473,7 @@ ipcMain.on('dock:appMenu', async (e, lnk, lang, pinned) => {
   Menu.buildFromTemplate([
     ...ws.map((x) => ({ label: (x.min ? '◦ ' : '• ') + x.title.slice(0, 60), click: () => winCmd(`front ${x.hwnd}`) })),
     ...(ws.length ? [{ type: 'separator' }] : []),
-    { label: a.name, click: () => shell.openPath(a.lnk) },
+    { label: a.name, click: () => openApp(a.lnk) },
     { label: L('Run as administrator'), click: () => execFile('powershell.exe', ['-NoProfile', '-Command', `Start-Process -FilePath '${a.lnk.replace(/'/g, "''")}' -Verb RunAs`], { windowsHide: true }) },
     { label: L('Open file location'), enabled: !!target, click: () => shell.showItemInFolder(target) },
     // the dock's own pins (an open app kept in the dock; taskbar pins come and go with the taskbar)
@@ -497,6 +503,12 @@ const thumb = async (p) => {
   if (!img || img.isEmpty()) img = await app.getFileIcon(p, { size: 'large' }).catch(() => null)
   return img?.toDataURL() ?? ''
 }
+// Windows' own Search (Win+S) and Task View (Win+Tab), which shows every desktop; they sit among the apps and drag like them
+const DOCK_TOOLS = { Search: 0x53, 'All desktops': 0x09, Taskbar: null, 'Terminal (Admin)': null } // the taskbar switch is the page's own
+ipcMain.handle('dock:tool', (_e, name) => {
+  if (name === 'Terminal (Admin)') execFile('powershell.exe', ['-NoProfile', '-Command', 'Start-Process wt.exe -Verb RunAs'], { windowsHide: true }, () => {}) // Windows asks through UAC
+  else if (DOCK_TOOLS[name]) return winCmd(`winvk ${DOCK_TOOLS[name]}`)
+})
 ipcMain.handle('dock:stacks', () => stacks())
 ipcMain.handle('dock:stack', async (_e, name) => {
   const s = stacks().find((x) => x.name === name)
@@ -832,7 +844,7 @@ ipcMain.handle('ha:dismiss', wrap((id) => remote.haDismiss(String(id))))
 ipcMain.handle('ha:events', wrap((ids, start, end) => remote.haEvents(ids, start, end)))
 // link tiles: a web address (http/https only), or one of the dock's apps by name (e.g. the mail client)
 ipcMain.on('overlay:openUrl', (_e, url) => { if (/^(https?:\/\/|obsidian:\/\/open\?)/i.test(String(url))) shell.openExternal(url) }) // web pages, or an Obsidian note
-ipcMain.on('overlay:openApp', (_e, name) => { const a = dockApps().find((x) => x.name === name); if (a) shell.openPath(a.lnk) })
+ipcMain.on('overlay:openApp', (_e, name) => { const a = dockApps().find((x) => x.name === name); if (a) openApp(a.lnk) })
 app.whenReady().then(() => globalShortcut.register('Control+Alt+H', toggleOverlay))
 app.on('will-quit', () => globalShortcut.unregisterAll())
 

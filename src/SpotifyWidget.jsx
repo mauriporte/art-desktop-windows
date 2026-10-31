@@ -8,7 +8,8 @@ const clock = (s) => (s == null || isNaN(s) ? '' : `${Math.floor(s / 60)}:${Stri
 
 // What's playing, with its cover, see-through like the notch and panel: this PC's own players first (Windows' media
 // controls: exact song and time, no lag), then my paired devices (Joint Remote: phones, tablet, TV, watch, the Linux desktop),
-// then the house's players in Home Assistant (Spotify elsewhere...).
+// then the house's players in Home Assistant (Spotify elsewhere...). The right panel's player shows only this PC and the
+// corner slide-in only what plays outside it, each with its own controls; the desktop widget shows whichever comes first.
 // Song, artist and cover change together, only once the new cover has loaded.
 // As a desktop widget (slide = false) it drags anywhere and right-click gives "Always on top"; as the slide-in it lives
 // at the top of the left edge and collapses to the left like the panel.
@@ -24,15 +25,19 @@ const appName = (id = '') => { const w = id.split('.').filter((x) => !/^(org|com
 
 // every source in one shape; at = when position was true (ms). Order: this PC playing, a device of mine playing,
 // an HA player playing, a device paused, this PC paused, then HA's (Spotify idle, a TV that only says "on")
-async function nowPlaying() {
-  const [l, devs, r] = await Promise.all([ha('local'), ha('devicesNow').then((x) => x.value ?? []), ha('nowPlaying').then((x) => x.value)])
+async function nowPlaying(scope) {
+  const l = await ha('local')
   const local = l?.title && { local: true, app: l.app, key: l.raw, title: l.title, artist: l.artist, album: l.album, playing: !!l.playing, position: l.position, at: l.updatedAt, duration: l.duration }
+  if (scope === 'local') return local || null
+  const here = scope === 'global' && local ? { title: local.title, playing: local.playing, spotify: /spotify/i.test(local.app) || WEB_SPOTIFY.test(local.app) } : undefined
+  const [devs, r] = await Promise.all([ha('devicesNow').then((x) => x.value ?? []), ha('nowPlaying', here).then((x) => x.value)])
   const dev = devs.map((n) => ({ host: n.host, key: `${n.host}|${n.app}|${n.title}|${n.artist}`, title: n.title || appName(n.app), artist: n.artist, album: n.device,
     playing: n.state === 'playing', paused: n.state === 'paused', position: n.position, at: n.updatedAt, duration: n.duration, art: n.art ?? null }))
   // HA's TV with no song info (nor playing/paused): unknown, so no play/pause button at all until a real state arrives
   const app = r?.app && !r.title ? appName(r.app) : ''
   const remote = r && { id: r.id, key: `${r.id}|${r.title || r.app}|${r.artist}|${r.picture}`, title: r.title || app, artist: r.title ? r.artist : app && r.name, album: r.album,
     playing: r.state === 'playing', unknown: r.state === 'on', position: r.position, at: r.positionAt && Date.parse(r.positionAt), duration: r.duration, volume: r.volume, picture: r.picture }
+  if (scope === 'global') return dev.find((d) => d.playing) || (remote?.playing && remote) || dev.find((d) => d.paused) || remote || null
   return (local?.playing && local) || dev.find((d) => d.playing) || (remote?.playing && remote) || dev.find((d) => d.paused) || local || remote || null
 }
 
@@ -51,12 +56,12 @@ async function coverOf(c, prevArt) {
   return c.picture ? (await ha('image', c.picture)).value ?? undefined : null
 }
 
-export function SpotifyPlayer({ slide = false }) {
+export function SpotifyPlayer({ slide = false, scope }) {
   useLang()
   const [cur, setCur] = useState(undefined) // latest reading
   const [shown, setShown] = useState(null) // what's on screen: {...song, art}
   const [now, setNow] = useState(Date.now())
-  const refresh = () => nowPlaying().then(setCur, () => {})
+  const refresh = () => nowPlaying(scope).then(setCur, () => {})
   useEffect(() => { refresh(); const a2 = setInterval(refresh, 1500); return () => clearInterval(a2) }, [])
   useEffect(() => { const t2 = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(t2) }, [])
   // a new song: keep the old one on screen while its cover loads (retrying), then switch all of it at once
@@ -146,7 +151,7 @@ export function SpotifySlide() {
             className={`absolute right-2 top-2 z-10 rounded-full p-2 ${pinned ? 'text-accent' : 'text-muted hover:text-white'}`}>
             {pinned ? <Pin size={16} /> : <PinOff size={16} />}
           </button>
-          <SpotifyPlayer slide />
+          <SpotifyPlayer slide scope="global" />
         </div>
       )}
     </div>

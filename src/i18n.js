@@ -58,7 +58,7 @@ const ES = {
   'Reply to': 'Responder a', Dictate: 'Dictar', Send: 'Enviar', 'Sending…': 'Enviando…', Sent: 'Enviado', 'Not sent': 'No enviado',
   Working: 'Trabajando', 'Waiting for you': 'Esperándote', Done: 'Terminado', Idle: 'En espera',
   // dock
-  'Open in Explorer': 'Abrir en el Explorador', Empty: 'Vacío', 'Recycle Bin': 'Papelera de reciclaje',
+  'Open in Explorer': 'Abrir en el Explorador', Empty: 'Vacío', 'Recycle Bin': 'Papelera de reciclaje', 'All desktops': 'Todos los escritorios', 'Show as list': 'Ver como lista', 'Show as grid': 'Ver como cuadrícula', 'Terminal (Admin)': 'Terminal (Administrador)',
   'Taskbar hidden (click to show it)': 'Barra de tareas oculta (pulsa para mostrarla)', 'Hide the Windows taskbar': 'Ocultar la barra de tareas de Windows',
   Downloads: 'Descargas', Documents: 'Documentos', Pictures: 'Imágenes', Network: 'Red',
   // controls, torrents, dashboards, lights (29/10)
