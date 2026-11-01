@@ -36,7 +36,7 @@ a tray button, and a mic for your Home Assistant voice assistant.
 **Dock** (one per screen, any edge). Your taskbar's pinned apps plus its own pins ("Keep in dock"), running apps, stacks
 of recent files (Downloads, Documents, Pictures, network drives, any folder; each shows as a grid or a list), the Recycle Bin, Search, All desktops (Windows' Task View), an administrator terminal and the taskbar switch (those last four drag like the apps).
 Magnify wave on hover, drag icons to reorder, right-click for windows, run as administrator, file location and
-dock settings (edge, icon pack, distance from the edge).
+dock settings (edge, icon pack, distance from the edge, keep it open, always on top, reserve its space).
 
 **Side panel** (top-right corner of the right-most screen): Music (what plays on this PC), Weather and Remote. Pinned it's frosted glass;
 unpinned it floats.

@@ -94,6 +94,8 @@ function dockShape(w, s) {
     top: [{ x: off, y: 0, width: s.len, height: t }], bottom: [{ x: off, y: s.h - t, width: s.len, height: t }] }[w.edge]
 }
 
+// "Always on top" (its right-click menu, per screen, on unless turned off): off, other windows can cover the dock; it still comes up front when it opens
+const dockOnTop = (w) => dockConf()._onTop?.[screenKey(w.display)] !== false
 function place(w, open) {
   w.open = open
   const p = bounds(w.kind, w.display.bounds, w.edge, w.expanded)
@@ -102,6 +104,7 @@ function place(w, open) {
   w.win.setContentBounds({ ...(open ? p.open : p.closed), width: p.s.w, height: p.s.h })
   if (open) w.hot.hide()
   else w.hot.showInactive()
+  if (open && w.kind === 'dock' && !dockOnTop(w)) w.win.moveTop()
 }
 
 function createIndicator(kind, display, edge) {
@@ -164,6 +167,7 @@ function createSlider(kind, display, edge) {
   win.setAlwaysOnTop(true, 'screen-saver')
   const w = { kind, win, display, edge, hot: createIndicator(kind, display, edge) }
   wins.push(w)
+  if (kind === 'dock' && !dockOnTop(w)) win.setAlwaysOnTop(false)
   place(w, false)
   // --open=<kind> starts that window expanded (for checking the layout without hovering), --tab=<name> picks a notch tab
   const arg = (n) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3)
@@ -626,6 +630,10 @@ function dockMenuItems(w, stackName) {
     if (!r.canceled && p && !list.some((s) => s.path === p)) { list.push({ name: path.basename(p) || p, path: p }); saveStacks(list); refreshDocks() }
   }
   return [
+    { label: L('Always on top'), type: 'checkbox', checked: dockOnTop(w), click: () => {
+      const conf = dockConf(), on = !dockOnTop(w); conf._onTop = { ...conf._onTop, [screenKey(w.display)]: on }
+      fs.writeFileSync(DOCK_CONF, JSON.stringify(conf, null, 1)); w.win.setAlwaysOnTop(on, 'screen-saver')
+    } },
     // reserved: Windows keeps this dock's strip free, hidden or not (maximized windows stop at its edge); per screen
     { label: L("Reserve the dock's space"), type: 'checkbox', checked: !!dockConf()._reserve?.[screenKey(w.display)], click: () => {
       const conf = dockConf(); conf._reserve = { ...conf._reserve, [screenKey(w.display)]: !conf._reserve?.[screenKey(w.display)] }
