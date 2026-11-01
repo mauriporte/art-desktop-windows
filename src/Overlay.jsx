@@ -158,18 +158,35 @@ export function CalendarTile({ edit, remove, open }) {
   const [cals, setCals] = useState([])
   const [events, setEvents] = useState(null)
   const [hidden, setHidden] = useState(() => { try { return JSON.parse(load('calHidden', '[]')) } catch { return [] } })
-  useEffect(() => { ha('calendars').then((r) => r.value && setCals(r.value)) }, [])
+  const [failed, setFailed] = useState(false) // the last read didn't answer; it's being retried
+  // HA may not answer yet (the app starts with Windows): keep asking until it does
+  useEffect(() => {
+    let timer, gone = false
+    const get = () => ha('calendars').catch(() => ({})).then((r) => {
+      if (gone) return
+      setFailed(!r?.value)
+      if (r?.value) { setCals(r.value); if (!r.value.length) setEvents([]) } else timer = setTimeout(get, 15000)
+    })
+    get()
+    return () => { gone = true; clearTimeout(timer) }
+  }, [])
   useEffect(() => {
     const ids = cals.map((c) => c.entity_id).filter((id) => !hidden.includes(id))
     if (!cals.length) return
+    let retry
     const read = () => {
+      clearTimeout(retry)
       const start = new Date(); start.setHours(0, 0, 0, 0)
       const end = new Date(start.getTime() + 14 * 86400000)
       // all-day events end at midnight of the next day: one that ended by today's start is yesterday's
       const ends = (e) => new Date(e.end?.dateTime ?? `${e.end?.date}T00:00`)
-      ha('events', ids, start.toISOString(), end.toISOString()).then((r) => r.value && setEvents(r.value.filter((e) => ends(e) > start).sort((a, b) => when(a) - when(b))))
+      ha('events', ids, start.toISOString(), end.toISOString()).catch(() => ({})).then((r) => {
+        setFailed(!r?.value)
+        if (r?.value) setEvents(r.value.filter((e) => ends(e) > start).sort((a, b) => when(a) - when(b)))
+        else retry = setTimeout(read, 30000)
+      })
     }
-    read(); const id = setInterval(read, 5 * 60000); return () => clearInterval(id)
+    read(); const id = setInterval(read, 5 * 60000); return () => { clearInterval(id); clearTimeout(retry) }
   }, [cals, hidden])
   const when = (e) => new Date(e.start.dateTime ?? `${e.start.date}T00:00`)
   const toggle = (id) => { const h = hidden.includes(id) ? hidden.filter((x) => x !== id) : [...hidden, id]; setHidden(h); save('calHidden', JSON.stringify(h)) }
@@ -190,7 +207,7 @@ export function CalendarTile({ edit, remove, open }) {
           className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={off ? { color: '#8a8a8e', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.12)' } : { color: '#fff', background: `${tone(c.entity_id)}55`, boxShadow: `inset 0 0 0 1px ${tone(c.entity_id)}` }}>{c.name}</button>
       })}</div>
       <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pr-1 text-xs">
-        {!events ? <span className="text-muted">…</span> : !events.length ? <span className="text-muted">{t('Nothing in the next two weeks.')}</span> : events.map((e, i) => {
+        {!events ? <span className="text-muted">{failed ? t("Can't read the calendar, trying again") : '…'}</span> : !events.length ? <span className="text-muted">{t('Nothing in the next two weeks.')}</span> : events.map((e, i) => {
           const d = day(when(e)), head = d !== last; last = d
           return (
             <div key={i}>

@@ -139,9 +139,12 @@ async function haEntities() {
 // calendars (the overlay's calendar tile): HA's list, and each chosen calendar's events between two times
 async function haCalendars() { return (await haGet('/api/calendars')).json() }
 async function haEvents(ids, start, end) {
-  const lists = await Promise.all(ids.filter((id) => /^calendar\.[\w]+$/.test(id)).map(async (id) =>
+  // one calendar failing (its app switched off, say) doesn't lose the others; only all of them failing is an error
+  const lists = await Promise.allSettled(ids.filter((id) => /^calendar\.[\w]+$/.test(id)).map(async (id) =>
     ((await (await haGet(`/api/calendars/${id}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`)).json()) ?? []).map((e) => ({ ...e, calendar: id }))))
-  return lists.flat()
+  const read = lists.filter((l) => l.status === 'fulfilled')
+  if (lists.length && !read.length) throw lists[0].reason
+  return read.flatMap((l) => l.value)
 }
 
 // to-do lists and notifications (the dashboard's Listas / Notificaciones panels)
