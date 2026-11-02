@@ -13,14 +13,17 @@ echo Installing packages...
 call npm install --no-fund --no-audit || (echo npm install failed. & pause & exit /b 1)
 rem newer npm versions skip install scripts: fetch Electron's runtime if that happened
 if not exist "node_modules\electron\dist\electron.exe" node node_modules\electron\install.js
+rem under Node 26 that script unpacks only the locales folder: unpack its downloaded zip with Windows' own tar
+if not exist "node_modules\electron\dist\electron.exe" powershell -NoProfile -Command "$v = (Get-Content node_modules\electron\package.json -Raw | ConvertFrom-Json).version; $z = (Get-ChildItem $env:LOCALAPPDATA\electron\Cache -Recurse -Filter electron-v$v-win32-x64.zip -ErrorAction SilentlyContinue | Select-Object -First 1).FullName; if ($z) { New-Item -ItemType Directory -Force node_modules\electron\dist | Out-Null; & \"$env:SystemRoot\System32\tar.exe\" -xf $z -C node_modules\electron\dist }"
+if exist "node_modules\electron\dist\electron.exe" if not exist "node_modules\electron\path.txt" (echo|set /p="electron.exe")>"node_modules\electron\path.txt"
 if not exist "node_modules\electron\dist\electron.exe" (echo Electron could not be downloaded. & pause & exit /b 1)
 echo Building...
 call npm run build || (echo Build failed. & pause & exit /b 1)
 rem settings: an example house file on first install (the Home Assistant token goes in ha.json, which you create)
 set "CFG=%USERPROFILE%\.config\art-desktop"
 if not exist "%CFG%" mkdir "%CFG%"
-if not exist "%CFG%\house.json" copy /y "config\house.example.json" "%CFG%\house.json" >nul
-rem the icon packs that ship with the app (Mac Dark: the dock's default look); yours in the same folder stay
+if not exist "%CFG%\house.json" copy /y "config\house.example.json" "%CFG%\house.json" >nul
+rem the icon packs that ship with the app (Mac Dark: the dock's default look); yours in the same folder stay
 xcopy /e /i /y "icon-packs" "%CFG%\icon-packs" >nul
 call "%~dp0install-startup.cmd"
 echo.

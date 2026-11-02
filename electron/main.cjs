@@ -174,6 +174,9 @@ function createSlider(kind, display, edge) {
   const query = { view: kind, edge, screen: screenKey(display), ...(arg('open') === kind ? { open: '1', tab: arg('tab') ?? '' } : {}) }
   win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), { query })
   win.once('ready-to-show', () => win.showInactive())
+  // the main process's own failures go there too: without this one stops windows from appearing and leaves no trace
+  process.on('uncaughtException', (e) => fs.appendFile(path.join(require('os').homedir(), '.config', 'art-desktop', 'app.log'),
+    `${new Date().toISOString()} main ${e?.stack ?? e}\n`, () => {}))
   // page errors go to ~/.config/art-desktop/app.log (a crashed see-through page just looks empty)
   win.webContents.on('console-message', (e) => {
     if (e.level === 'error' || e.level === 'warning') fs.appendFile(path.join(require('os').homedir(), '.config', 'art-desktop', 'app.log'),
@@ -493,10 +496,13 @@ ipcMain.on('dock:appMenu', async (e, lnk, lang, pinned) => {
 // The list is ~/.config/art-desktop/stacks.json, [{name, path} | {name, type: "network"}]; the user adds/removes from the dock.
 const STACK_CONF = path.join(require('os').homedir(), '.config', 'art-desktop', 'stacks.json')
 const RECYCLE = 'shell:RecycleBinFolder', NETWORK = 'shell:NetworkPlacesFolder'
+// Windows' own folder, or the usual one under the user's folder: getPath throws when Windows points the folder at
+// one that doesn't exist (a redirected Downloads that is gone), which used to stop the docks from starting
+const userDir = (name) => { try { return app.getPath(name) } catch { return path.join(require('os').homedir(), name[0].toUpperCase() + name.slice(1)) } }
 function stacks() {
   try { return JSON.parse(fs.readFileSync(STACK_CONF, 'utf8')) } catch {}
-  return [{ name: 'Downloads', path: app.getPath('downloads') }, { name: 'Documents', path: app.getPath('documents') },
-    { name: 'Pictures', path: app.getPath('pictures') }, { name: 'Red', type: 'network' }]
+  return [{ name: 'Downloads', path: userDir('downloads') }, { name: 'Documents', path: userDir('documents') },
+    { name: 'Pictures', path: userDir('pictures') }, { name: 'Red', type: 'network' }]
 }
 const saveStacks = (list) => { fs.mkdirSync(path.dirname(STACK_CONF), { recursive: true }); fs.writeFileSync(STACK_CONF, JSON.stringify(list, null, 1)) }
 // mapped network drives from `net use` (fast; Explorer's own Network view can take minutes to enumerate)

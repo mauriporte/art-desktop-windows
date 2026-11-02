@@ -114,7 +114,9 @@ function setup({ loadPage, hideNotch, windowRects }) {
   })
   ipcMain.handle('grab:copy', (_e, url) => { clipboard.writeImage(nativeImage.createFromDataURL(url)); return true })
   ipcMain.handle('grab:save', (_e, url) => {
-    const dir = path.join(app.getPath('pictures'), 'Screenshots')
+    let pictures
+    try { pictures = app.getPath('pictures') } catch { pictures = path.join(require('os').homedir(), 'Pictures') } // a redirected Pictures that is gone
+    const dir = path.join(pictures, 'Screenshots')
     fs.mkdirSync(dir, { recursive: true })
     const p = path.join(dir, `ART ${new Date().toISOString().slice(0, 19).replace('T', ' ').replace(/:/g, '.')}.png`)
     fs.writeFileSync(p, nativeImage.createFromDataURL(url).toPNG())
