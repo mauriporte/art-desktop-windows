@@ -1,4 +1,5 @@
 {
+  "ollama": "http://localhost:11434",
   "_comment": "Copy to ~/.config/art-desktop/house.json and fill in what you have. Anything left out simply doesn't show.",
   "city": "London",
   "relayName": "Me (notch)",

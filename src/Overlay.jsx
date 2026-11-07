@@ -22,7 +22,7 @@ const SIZES = [[1, 1], [2, 1], [1, 2], [2, 2], [3, 2], [4, 2]]
 // a tile is an HA entity ({ entity }), optionally with HA's own touches from an imported dashboard: icon (an MDI path),
 // color, confirm (text: a second tap does it), action ({ service, entity }: e.g. trigger an automation), assist (opens
 // the voice assistant's talk card), nav (an HA path, opened in the browser), camera (a live picture)
-function Tile({ tile, s, edit, remove, flash, open, resize, projects, loaded, cell = CELL }) {
+function Tile({ tile, s, edit, remove, flash, open, resize, projects, loaded, cell = CELL, row = cell }) {
   const domain = tile.entity?.split('.')[0], Icon = ICON[domain] ?? CircleDot, on = isOn(s)
   const link = tile.nav || tile.url || tile.app || tile.action || tile.assist || tile.relay || tile.projects // opens or does something (it may still show its entity's value)
   // before the first read nothing is "unavailable" yet: the tile just waits
@@ -48,7 +48,7 @@ function Tile({ tile, s, edit, remove, flash, open, resize, projects, loaded, ce
   const grab = (e) => {
     e.stopPropagation(); e.preventDefault()
     const x0 = e.clientX, y0 = e.clientY, w0 = tile.w ?? 1, h0 = tile.h ?? 1
-    const size = (ev) => [Math.max(1, Math.min(4, Math.round(w0 + (ev.clientX - x0) / (cell + GAP)))), Math.max(1, Math.min(4, Math.round(h0 + (ev.clientY - y0) / (cell + GAP))))]
+    const size = (ev) => [Math.max(1, Math.min(4, Math.round(w0 + (ev.clientX - x0) / (cell + GAP)))), Math.max(1, Math.min(4, Math.round(h0 + (ev.clientY - y0) / (row + GAP))))]
     const move = (ev) => resize(...size(ev), false)
     const up = (ev) => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); resize(...size(ev), true) }
     addEventListener('pointermove', move); addEventListener('pointerup', up)
@@ -526,6 +526,19 @@ export default function Overlay() {
   // CELL) when a whole row of room opens up
   const [cell, setCell] = useState(CELL)
   const body = useRef()
+  // the grid's rows take whatever height makes the grid end where the side column ends; the columns keep their width
+  const side = useRef()
+  const [row, setRow] = useState(null)
+  useLayoutEffect(() => {
+    const grid = body.current?.querySelector('.grid'), col = side.current
+    if (!grid || !col) return
+    const rows = getComputedStyle(grid).gridTemplateRows.split(' ').filter(Boolean).length
+    const kids = [...col.children], top = grid.getBoundingClientRect().top
+    // the side column's own height (it stretches to the row, so its parts are added up)
+    const end = kids.reduce((h, k) => h + k.getBoundingClientRect().height, 0) + 8 * (kids.length - 1) + 4 + col.getBoundingClientRect().top
+    const want = rows ? Math.max(40, Math.floor((end - top - (rows - 1) * GAP) / rows)) : null
+    if (want && Math.abs(want - (row ?? cell)) > 1) setRow(want)
+  })
   useLayoutEffect(() => {
     const b = body.current?.getBoundingClientRect().bottom
     if (!b) return
@@ -574,9 +587,9 @@ export default function Overlay() {
         <div className="flex h-9 items-center gap-3">
           <span className="text-sm text-accent">{msg}</span>
         </div>
-        <Sortable name="overlay" locked={locked} className="grid content-start transition-opacity" style={{ opacity: fade, gridTemplateColumns: `repeat(${COLS}, ${cell}px)`, gridAutoRows: `${cell}px`, gridAutoFlow: 'dense', gap: GAP }}>
+        <Sortable name="overlay" locked={locked} className="grid content-start transition-opacity" style={{ opacity: fade, gridTemplateColumns: `repeat(${COLS}, ${cell}px)`, gridAutoRows: `${row ?? cell}px`, gridAutoFlow: 'dense', gap: GAP }}>
           {tiles.map((x) => x.calendar ? <CalendarTile key={x.id} span={[x.w ?? 4, x.h ?? 2]} edit={edit} open={() => setEditing(x)} remove={() => change(tiles.filter((y) => y !== x))} />
-            : <Tile key={x.id ?? x.entity} span={[x.w ?? 1, x.h ?? 1]} tile={x} s={states[x.entity]} loaded={statesLoaded} edit={edit} flash={flash} cell={cell}
+            : <Tile key={x.id ?? x.entity} span={[x.w ?? 1, x.h ?? 1]} tile={x} s={states[x.entity]} loaded={statesLoaded} edit={edit} flash={flash} cell={cell} row={row ?? cell}
             open={() => setEditing(x)} remove={() => change(tiles.filter((y) => y !== x))} projects={() => setProjectsOpen(true)}
             resize={(w, h, keep) => { const list = tiles.map((y) => (y === x ? { ...y, w, h } : y)); keep ? change(list) : setTiles(list) }} />)}
           {edit && <button key="+" onClick={() => setPicking(true)} title={t('Add a tile')}
@@ -585,7 +598,7 @@ export default function Overlay() {
         </div>
         {/* the servers, one under the other; a tap slides its apps in from the right */}
         {/* drag to reorder them too (locked with the rest) */}
-        <div className="flex w-[250px] shrink-0 flex-col gap-2">
+        <div ref={side} className="flex w-[250px] shrink-0 flex-col gap-2">
           {/* the controls: an invisible tile on top of the first side tile, outside the grid's margins */}
           {/* right-aligned: the click-through button keeps its corner whether or not the others show */}
           <div className="flex h-9 items-center justify-end gap-2">

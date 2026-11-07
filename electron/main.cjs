@@ -17,7 +17,7 @@ ideas.setup({ house })
 // Three auto-hiding glass windows: the notch (top centre of every screen), the side panel (right edge of the rightmost
 // screen, like the Linux desktop's) and the dock (bottom of the main screen). Hidden, each moves fully off its edge; a tiny
 // see-through window with a short orange dash stays as the hover target (acrylic windows can't be shorter than ~30 px).
-const DOCK_THICK = 84, DOCK_STEP = 60 // dock depth, and the space per app icon along it
+const DOCK_THICK = 280, DOCK_STEP = 60 // dock depth (room for the largest magnify, 4x), and the space per app icon along it
 const KINDS = {
   notch: { size: () => ({ w: 720, h: 560 }), hot: () => ({ w: 120, h: 6 }) },
   // the remote panel opens only from the top-right corner of its screen: a small corner hot spot
@@ -32,14 +32,14 @@ const KINDS = {
     // shape (dockShape) shows just the strip until a stack opens
     size: (b, edge) => {
       const along = (edge === 'left' || edge === 'right' ? b.height : b.width) - 40
-      const len = Math.min((dockApps().length + extraApps + stacks().length + 5) * DOCK_STEP + 80, along) // apps + open unpinned apps + stacks + trash + the 4 DOCK_TOOLS
+      const len = Math.min((dockApps().length + extraApps + stacks().length + 7) * DOCK_STEP + 80, along) // apps + open unpinned apps + stacks + trash + the 5 DOCK_TOOLS
       const thick = DOCK_THICK + STACK_GRID
       return edge === 'left' || edge === 'right' ? { w: thick, h: Math.max(len, 480), len } : { w: Math.max(len, 560), h: thick, len }
     },
     // touch the edge anywhere along it; on top only left of the notch, on the right only above the panel's tab
     hot: (b, edge) => edge === 'top' ? { w: Math.round(b.width / 2) - 90, h: 4, x: b.x }
       : edge === 'left' || edge === 'right' ? { w: 4, h: b.height - CORNER * 4, bottom: true }   // the side edge below the corners
-      : { w: b.width, h: 4 },
+      : { w: b.width - CORNER * 8, h: 4 },   // the bottom edge minus its corners (bottom-right opens Task View, taskview.ps1)
   },
 }
 const STACK_GRID = 420 // room for an open stack's grid
@@ -165,6 +165,14 @@ function createSlider(kind, display, edge) {
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), webviewTag: true },
   })
   win.setAlwaysOnTop(true, 'screen-saver')
+  // the notch stays at 100 %: without its own menu the default zoom keys (Ctrl + / Ctrl -) don't reach it, and every
+  // load resets the zoom; a zoomed notch overflowed its fixed window
+  if (kind === 'notch') {
+    win.removeMenu()
+    win.webContents.setVisualZoomLevelLimits(1, 1)
+    win.webContents.on('did-finish-load', () => win.webContents.setZoomFactor(1))
+    win.webContents.on('zoom-changed', () => win.webContents.setZoomFactor(1))
+  }
   const w = { kind, win, display, edge, hot: createIndicator(kind, display, edge) }
   wins.push(w)
   if (kind === 'dock' && !dockOnTop(w)) win.setAlwaysOnTop(false)
@@ -323,7 +331,9 @@ const MENU_ES = { 'Run as administrator': 'Ejecutar como administrador', 'Open f
   'Close window': 'Cerrar ventana', 'Add stack…': 'Añadir pila…', 'Remove stack': 'Quitar la pila', 'Add a stack to the dock': 'Añadir una pila al dock',
   Left: 'Izquierda', Right: 'Derecha', Top: 'Arriba', Bottom: 'Abajo', 'Off on this screen': 'Sin dock en esta pantalla',
   'Icon pack': 'Pack de iconos', 'System icons': 'Iconos del sistema', 'Open icon packs folder': 'Abrir la carpeta de packs de iconos',
-  'Distance from edge': 'Distancia al borde', 'Keep the dock open': 'Mantener el dock abierto', "Reserve the dock's space": 'Reservar el espacio del dock', 'Always on top': 'Siempre visible' }
+  'Distance from edge': 'Distancia al borde', 'Keep the dock open': 'Mantener el dock abierto', "Reserve the dock's space": 'Reservar el espacio del dock', 'Always on top': 'Siempre visible',
+  'Turn the dock back on': 'Volver a poner el dock', 'Screen': 'Pantalla', 'Left screen only': 'Solo la pantalla izquierda', 'Right screen only': 'Solo la pantalla derecha', 'Both screens': 'Las dos pantallas', 'left': 'izquierda', 'right': 'derecha',
+  Magnify: 'Ampliación', Off: 'Sin ampliación', Small: 'Pequeña', Medium: 'Media', Large: 'Grande', 'Extra large': 'Muy grande' }
 const L = (s) => (menuLang === 'es' ? MENU_ES[s] ?? s : s)
 
 // ---- dock: the taskbar's pinned apps (shortcut files), launched through the shell
@@ -407,6 +417,15 @@ function winCmd(line) {
   })))
 }
 app.on('will-quit', () => winHelper?.kill())
+
+// Task View like the Mac's Mission Control: wheel click on the desktop, or the bottom-right screen corner (taskview.ps1)
+let taskView
+app.whenReady().then(() => {
+  taskView = require('child_process').spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, 'taskview.ps1')], { windowsHide: true })
+  taskView.stderr.on('data', (d) => fs.appendFile(path.join(require('os').homedir(), '.config', 'art-desktop', 'app.log'), `${new Date().toISOString()} taskview: ${String(d).trim()}
+`, () => {}))
+})
+app.on('will-quit', () => taskView?.kill())
 
 // which exe a pinned shortcut starts (cached); File Explorer's windows are explorer.exe's CabinetWClass ones
 const targets = new Map()
@@ -514,9 +533,18 @@ const thumb = async (p) => {
   return img?.toDataURL() ?? ''
 }
 // Windows' own Search (Win+S) and Task View (Win+Tab), which shows every desktop; they sit among the apps and drag like them
-const DOCK_TOOLS = { Search: 0x53, 'All desktops': 0x09, Taskbar: null, 'Terminal (Admin)': null } // the taskbar switch is the page's own
+const DOCK_TOOLS = { Search: 0x53, 'All desktops': 0x09, Taskbar: null, 'Terminal (Admin)': null, Screensaver: null, Screens: null } // the taskbar switch is the page's own
 ipcMain.handle('dock:tool', (_e, name) => {
-  if (name === 'Terminal (Admin)') execFile('powershell.exe', ['-NoProfile', '-Command', 'Start-Process wt.exe -Verb RunAs'], { windowsHide: true }, () => {}) // Windows asks through UAC
+  // which screens to use (each HDMI switch keeps its screen "connected"): a small menu, the same as the Start shortcuts
+  if (name === 'Screens') {
+    const run = (m) => execFile('wscript.exe', [path.join(require('os').homedir(), 'screen-toggle', 'toggle.vbs'), m], () => {})
+    return Menu.buildFromTemplate([['Left screen only', 'left'], ['Right screen only', 'right'], ['Both screens', 'both']]
+      .map(([l, m]) => ({ label: L(l), click: () => run(m) }))).popup()
+  }
+  // the moon: starts the screensaver chosen in Windows' settings now (its .scr with /s)
+  if (name === 'Screensaver') execFile('powershell.exe', ['-NoProfile', '-Command',
+    '$s = (Get-ItemProperty "HKCU:\\Control Panel\\Desktop").\'SCRNSAVE.EXE\'; if ($s) { Start-Process $s -ArgumentList "/s" }'], { windowsHide: true }, () => {})
+  else if (name === 'Terminal (Admin)') execFile('powershell.exe', ['-NoProfile', '-Command', 'Start-Process wt.exe -Verb RunAs'], { windowsHide: true }, () => {}) // Windows asks through UAC
   else if (DOCK_TOOLS[name]) return winCmd(`winvk ${DOCK_TOOLS[name]}`)
 })
 ipcMain.handle('dock:stacks', () => stacks())
@@ -652,6 +680,8 @@ function dockMenuItems(w, stackName) {
     ...(stackName ? [{ label: `${L('Remove stack')} "${stackName}"`, click: () => { saveStacks(stacks().filter((s) => s.name !== stackName)); refreshDocks() } }] : []),
     { type: 'separator' },
     ...Object.keys(label).map((k) => ({ label: `${L('Dock')}: ${L(label[k])}`, type: 'radio', checked: k === w.edge, click: () => set(k) })),
+    // screens whose dock was turned off have no dock to right-click, so they are turned back on from here
+    ...offScreens().map(({ d, name }) => ({ label: `${L('Turn the dock back on')}: ${name}`, click: () => dockOn(d) })),
     { type: 'separator' },
     { label: L('Icon pack'), submenu: [
       { label: L('System icons'), type: 'radio', checked: dockConf()._iconPack === '', click: () => setPack(null) },
@@ -663,7 +693,24 @@ function dockMenuItems(w, stackName) {
     { label: L('Distance from edge'), submenu: [2, 6, 12, 20].map((px) => ({ label: `${px} px`, click: () => {
       for (const d of wins.filter((x) => x.kind === 'dock')) d.win.webContents.send('dock:gap', px)
     } })) },
+    // how much the icons grow under the cursor, for this dock only (its page keeps it per screen)
+    { label: L('Magnify'), submenu: [['Off', 1], ['Small', 1.5], ['Medium', 2], ['Large', 3], ['Extra large', 4]].map(([n, f]) => ({
+      label: L(n), click: () => w.win.webContents.send('dock:magnify', f),
+    })) },
   ]
+}
+// screens with their dock set to "off", named by position ("Screen 2 (right)")
+function offScreens() {
+  const all = screen.getAllDisplays().sort((a, b) => a.bounds.x - b.bounds.x)
+  return all.map((d, i) => ({ d, name: `${L('Screen')} ${i + 1}` + (all.length > 1 ? ` (${L(i === 0 ? 'left' : 'right')})` : '') }))
+    .filter(({ d }) => dockEdge(d, all) === 'off')
+}
+// back to the screen's default edge (the outer one), like a first start
+function dockOn(d) {
+  const conf = dockConf(); delete conf[screenKey(d)]
+  fs.writeFileSync(DOCK_CONF, JSON.stringify(conf, null, 1))
+  createSlider('dock', d, dockEdge(d, screen.getAllDisplays()))
+  setTimeout(() => reserveDock(wins[wins.length - 1]), 800)
 }
 ipcMain.on('dock:menu', (e, stackName, lang, pinned) => {
   menuLang = lang
@@ -878,12 +925,34 @@ app.whenReady().then(() => {
   // the PC as a Joint Remote receiver (receiver.cjs): port 8733, announced on the network
   app.on('will-quit', receiver.setup({ winCmd }))
   readWidgets().forEach(createWidget)
+  layout()
+  taskbar(hideTaskbar() ? 'Hide' : 'Show') // Show also clears a see-through taskbar left by a killed app
+  // screens added, removed or rearranged (DisplaySwitch, an HDMI switch, scaling): lay everything out again once they settle
+  // only a real change of screens counts: the dock's own space reservation changes the work area, and reacting to that
+  // rebuilt the dock, which reserved again, in a loop
+  let relayout, shape = screensShape()
+  const changed = () => { clearTimeout(relayout); relayout = setTimeout(() => {
+    const now = screensShape()
+    if (now !== shape) { shape = now; layout() }
+  }, 1500) }
+  screen.on('display-added', changed); screen.on('display-removed', changed); screen.on('display-metrics-changed', changed)
+})
+
+// the notch on every screen, the panel on the rightmost, a dock per screen, Spotify on the leftmost. Called again when the
+// screens change: the new windows are made first, then the old ones go (with no windows left the app would quit)
+const screensShape = () => JSON.stringify(screen.getAllDisplays().map((d) => [d.id, d.bounds, d.scaleFactor]))
+function layout() {
+  const old = wins.splice(0)
   const all = screen.getAllDisplays()
   all.forEach((d) => createSlider('notch', d, 'top'))
   createSlider('panel', all.reduce((r, d) => (d.bounds.x + d.bounds.width > r.bounds.x + r.bounds.width ? d : r)), 'right')
   all.forEach((d) => { const e = dockEdge(d, all); if (e !== 'off') createSlider('dock', d, e) })
   setTimeout(() => wins.filter((w) => w.kind === 'dock').forEach(reserveDock), 1500) // once the windows exist
   createSlider('spotify', all.reduce((r, d) => (d.bounds.x < r.bounds.x ? d : r)), 'left')
-  taskbar(hideTaskbar() ? 'Hide' : 'Show') // Show also clears a see-through taskbar left by a killed app
-})
+  for (const w of old) {
+    if (w.kind === 'dock' && !w.hot.isDestroyed()) winCmd(`appbaroff ${w.hot.getNativeWindowHandle().readBigInt64LE(0)}`)
+    if (!w.win.isDestroyed()) w.win.destroy()
+    if (!w.hot.isDestroyed()) w.hot.destroy()
+  }
+}
 app.on('window-all-closed', () => app.quit())

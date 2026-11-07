@@ -109,7 +109,10 @@ function Controls({ radios }) {
   if (!radios.state) return <p className="text-muted">{t('Reading radios…')}</p>
   if (radios.state.error) return <p className="text-muted">{t('Radios unavailable')}: {radios.state.error}</p>
   const lan = (radios.state.lan ?? []).find((l) => l.up), wa = radios.state.wifi
-  const viaVpn = wa && radios.state.route === wa.name
+  // with house.json "networks.vpn" (Wi-Fi names) only those networks are the VPN and everything else is local IP;
+  // without it, traffic over Wi-Fi = VPN as before
+  const vpnNets = house.networks?.vpn, overWifi = !!wa && radios.state.route === wa.name
+  const viaVpn = overWifi && (vpnNets ? vpnNets.includes(radios.state.ssid) : true)
   const switchTraffic = async (via) => {
     setAsk(null); setTmsg(t('Switching…'))
     const r = await window.art.setTraffic(via, wa.name, lan.name)
@@ -148,8 +151,8 @@ function Controls({ radios }) {
           onClick={() => radios.set('WiFi', !wifi.on)} />
         {/* always shown: on whenever traffic flows; with only one network up it shows that one, and switching needs both */}
         <Tile on={!!lan || !!wa} icon={Shuffle} key="traffic" label={t('Traffic')} disabled={!lan && !wa}
-          sub={tmsg || t(!lan && !wa ? 'No network' : (lan && wa ? !viaVpn : !!lan) ? 'Via LAN' : 'Via VPN')}
-          sub2={lan && wa ? (viaVpn ? radios.state.ssid : lan.network) : lan ? lan.network : wa ? radios.state.ssid : ''}
+          sub={tmsg || t(!lan && !wa ? 'No network' : viaVpn ? 'Via VPN' : overWifi ? 'Local IP' : 'Via LAN')}
+          sub2={lan && wa ? (overWifi ? radios.state.ssid : lan.network) : lan ? lan.network : wa ? radios.state.ssid : ''}
           onClick={() => lan && wa && setAsk(viaVpn ? 'lan' : 'vpn')} />
         <Tile on={bt?.on} icon={bt?.on ? Bluetooth : BluetoothOff} key="bt" label="Bluetooth" disabled={!bt}
           sub={!bt ? t('No adapter') : t(bt.on ? 'On' : 'Off')} onClick={() => radios.set('Bluetooth', !bt.on)} />

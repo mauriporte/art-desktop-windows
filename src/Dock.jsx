@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Network, Trash2, FolderOpen, FolderDown, FileText, Image, PanelBottom, PanelBottomClose, Search, LayoutGrid, SquareTerminal, List } from 'lucide-react'
+import { Network, Trash2, FolderOpen, FolderDown, FileText, Image, PanelBottom, PanelBottomClose, Search, LayoutGrid, SquareTerminal, List, Moon, MonitorSmartphone } from 'lucide-react'
 import { query, useSlider, load as loadPref, save } from './slider.js'
 import { t, useLang } from './i18n.js'
 
 const RECYCLE = 'shell:RecycleBinFolder', NETWORK = 'shell:NetworkPlacesFolder'
 const STACK_ICONS = { Downloads: FolderDown, Documents: FileText, Pictures: Image }
-const TOOL_ICONS = { Search, 'All desktops': LayoutGrid, 'Terminal (Admin)': SquareTerminal } // for a pack without them
+const TOOL_ICONS = { Search, 'All desktops': LayoutGrid, 'Terminal (Admin)': SquareTerminal, Screensaver: Moon, Screens: MonitorSmartphone } // for a pack without them
 
 // Mac-style dock on its screen's edge (left / right / top / bottom; right-click to change, or to add/remove stacks).
 // Fully see-through: only the dark "dark apple" icon tiles show; hovering magnifies them in a wave with an orange glow.
@@ -27,6 +27,9 @@ export default function Dock() {
   const vertical = edge === 'left' || edge === 'right'
 
   const [gap, setGap] = useState(Number(loadPref('dockGap', 6))) // px between the icons and the screen edge
+  // how big the icon under the cursor grows (1 = off), per dock: kept under its screen (the old shared value is the default)
+  const magKey = 'dockMagnify:' + (query.get('screen') || '')
+  const [mag, setMag] = useState(Number(loadPref(magKey, loadPref('dockMagnify', 1.5))))
   const [taskbarHidden, setTaskbarHidden] = useState(false)
   // running apps: lnk -> [{min, fg}], refreshed while the dock is out
   const [running, setRunning] = useState({})
@@ -38,6 +41,7 @@ export default function Dock() {
   useEffect(() => {
     load(); window.art?.onDockChanged(load)
     window.art?.onDockGap((px) => { setGap(px); save('dockGap', px) })
+    window.art?.onDockMagnify((f) => { setMag(f); save(magKey, f) })
   }, [])
   useEffect(() => { const r = () => setSize({ w: innerWidth, h: innerHeight }); addEventListener('resize', r); return () => removeEventListener('resize', r) }, [])
   useEffect(() => { if (!open && stack) closeStack() }, [open])
@@ -73,7 +77,7 @@ export default function Dock() {
         Icon: taskbarHidden ? PanelBottomClose : PanelBottom, on: taskbarHidden,
         run: () => window.art?.setTaskbarHidden(!taskbarHidden).then(setTaskbarHidden) }
       : a.tool
-      ? { key: a.lnk, pin: true, title: t(a.name), img: a.icon, full: a.fromPack, Icon: TOOL_ICONS[a.name], run: () => window.art?.dockTool(a.name) }
+      ? { key: a.lnk, pin: true, title: t(a.name === 'Screens' ? 'One or two screens' : a.name), img: a.icon, full: a.fromPack, Icon: TOOL_ICONS[a.name], run: () => window.art?.dockTool(a.name) }
       : { key: a.lnk, pin: true, title: a.name, img: a.icon, full: a.fromPack, lnk: a.lnk, running: running[a.lnk],
         run: () => window.art?.activate(a.lnk).then(pollWindows) }),
     ...(extra.length ? [{ sep: true, key: 'sepRun' }] : []),
@@ -92,11 +96,11 @@ export default function Dock() {
   useEffect(() => { window.art?.dockThick(Math.round(tile + gap + 6)) }, [tile, gap])
   const away = { left: [1, 0], right: [-1, 0], top: [0, 1], bottom: [0, -1] }[edge]
 
-  // magnify wave: icons near the cursor grow (up to 1.5x) and lift away from the edge
+  // magnify wave: icons near the cursor grow (up to `mag`, set from the right-click menu) and lift away from the edge
   const scaleOf = (el) => {
     if (pos == null || !el) return 1
     const r = el.getBoundingClientRect(), c = vertical ? r.top + r.height / 2 : r.left + r.width / 2
-    return 1 + 0.5 * Math.max(0, 1 - Math.abs(pos - c) / (step * 2.2))
+    return 1 + (mag - 1) * Math.max(0, 1 - Math.abs(pos - c) / (step * 2.2))
   }
   const refs = useRef({})
   const frame = useRef()
@@ -110,7 +114,7 @@ export default function Dock() {
   const stripBox = (
     <div ref={strip} className={`flex shrink-0 justify-center ${vertical ? 'h-full flex-col' : 'w-full flex-row'}`}
       // icons hug the screen edge at `gap` px; the rest of the strip is room for the magnify wave
-      style={{ [vertical ? 'width' : 'height']: 84, gap: step - tile, alignItems: edge === 'left' || edge === 'top' ? 'flex-start' : 'flex-end',
+      style={{ [vertical ? 'width' : 'height']: 280, gap: step - tile, alignItems: edge === 'left' || edge === 'top' ? 'flex-start' : 'flex-end',
         [{ left: 'paddingLeft', right: 'paddingRight', top: 'paddingTop', bottom: 'paddingBottom' }[edge]]: gap }}
       onMouseMove={(e) => {
         setPos(vertical ? e.clientY : e.clientX)
@@ -142,8 +146,9 @@ export default function Dock() {
             onClick={() => { if (justDropped.current) return; it.run() }}
             onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); it.lnk ? window.art?.appMenu(it.lnk, pinned) : window.art?.dockMenu(it.stack, pinned) }}
             // orange glow + ring on the icon under the cursor (and on an open stack)
-            className={`relative flex shrink-0 items-center justify-center rounded-[22%] bg-card transition-[transform,box-shadow] duration-150 hover:shadow-[0_0_16px_rgba(232,101,10,.75)] hover:ring-1 hover:ring-accent ${it.active ? 'shadow-[0_0_16px_rgba(232,101,10,.75)] ring-1 ring-accent' : 'shadow-lg'} ${dragging ? 'z-10 ring-1 ring-accent shadow-[0_0_16px_rgba(232,101,10,.75)] !transition-none' : ''} ${dragDelta ? 'cursor-grabbing' : ''}`}
-            style={{ width: tile, height: tile, transform: move }}>
+            className={`relative flex shrink-0 items-center justify-center rounded-[22%] bg-card transition-[transform,box-shadow] duration-75 hover:shadow-[0_0_16px_rgba(232,101,10,.75)] hover:ring-1 hover:ring-accent ${it.active ? 'shadow-[0_0_16px_rgba(232,101,10,.75)] ring-1 ring-accent' : 'shadow-lg'} ${dragging ? 'z-10 ring-1 ring-accent shadow-[0_0_16px_rgba(232,101,10,.75)] !transition-none' : ''} ${dragDelta ? 'cursor-grabbing' : ''}`}
+            // the bigger an icon is in the wave, the higher it sits: the hovered one is always on top of its neighbours
+            style={{ width: tile, height: tile, transform: move, zIndex: dragging ? 100 : Math.round(s * 20) }}>
             {it.running && (
               // running dot on the screen-edge side; a hollow ring when every window of the app is minimized
               <span className={`absolute h-1.5 w-1.5 rounded-full ${it.running.every((w) => w.min) ? 'ring-1 ring-accent' : 'bg-accent'}`}

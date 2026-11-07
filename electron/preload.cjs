@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('art', {
   setTaskbarHidden: (hide) => ipcRenderer.invoke('taskbar:set', hide),
   onTaskbar: (fn) => ipcRenderer.on('taskbar:changed', (_e, hidden) => fn(hidden)),
   onDockGap: (fn) => ipcRenderer.on('dock:gap', (_e, px) => fn(px)),
+  onDockMagnify: (fn) => ipcRenderer.on('dock:magnify', (_e, f) => fn(f)),
   dockExpand: (on) => ipcRenderer.send('dock:expand', on),
   dockThick: (px) => ipcRenderer.send('dock:thick', px),
   getRadios: () => ipcRenderer.invoke('radios:get'),
