@@ -234,7 +234,10 @@ export default function Notch() {
   const [tint, setTint] = useState(Number(load('tint', 55)))
   const [city, setCity] = useCity()
   const [showLook, setShowLook] = useState(false)
-  // one strip of tabs; arrows on either side (when there's more that way) move it one tab at a time
+  // the tool buttons beside the pin fold away to the right, leaving the tab strip their room (remembered)
+  const [folded, setFolded] = useState(load('toolsFolded', '0') === '1')
+  const fold = (v) => { setFolded(v); save('toolsFolded', v ? '1' : '0'); setShowLook(false) }
+  // one strip of tabs; arrows on either side (when there's more that way) jump to that end
   const tabRow = useRef(), wheelAt = useRef(0)
   const [tip, setTip] = useState(null) // { text, x, y } of the hovered tab
   const talkTab = Object.keys(house.tiles ?? {}).find((k) => house.tiles[k].talk)
@@ -244,12 +247,6 @@ export default function Notch() {
   const strip = () => tabRow.current?.firstChild
   const readEdges = () => { const el = strip(); if (!el) return; const l = el.scrollLeft > 1, r = el.scrollLeft + el.clientWidth < el.scrollWidth - 1; if (l !== edges.l || r !== edges.r) setEdges({ l, r }) }
   useLayoutEffect(readEdges)
-  const step = (dir) => {
-    setTip(null) // the strip moves under the label
-    const el = strip(), kids = [...el.children], x = el.scrollLeft
-    const to = dir > 0 ? kids.find((k) => k.offsetLeft > x + 1) : kids.filter((k) => k.offsetLeft < x - 1).pop()
-    if (to) el.scrollTo({ left: Math.min(to.offsetLeft, el.scrollWidth - el.clientWidth), behavior: 'smooth' })
-  }
   const radios = useRadios(open)
 
   return (
@@ -263,13 +260,20 @@ export default function Notch() {
         <div className="relative flex h-full flex-col gap-4 p-5">
           <div className="flex items-center gap-2">
             {/* drag a tab to move it; one strip, the arrows show the rest one tab at a time */}
-            {edges.l && <button title={t('Previous')} onClick={() => step(-1)} className="rounded-full bg-card/80 p-1 text-muted hover:text-white"><ChevronLeft size={16} /></button>}
+            {edges.l && <button title={t('Previous')} onClick={() => { setTip(null); strip()?.scrollTo({ left: 0, behavior: 'smooth' }) }} className="rounded-full bg-card/80 p-1 text-muted hover:text-white"><ChevronLeft size={16} /></button>}
             <div ref={tabRow} className="min-w-0 flex-1" onScroll={readEdges}
-              // the mouse wheel moves the strip one tab per notch (at most every 120 ms, so a fast spin doesn't skip many)
-              onWheel={(e) => { const now = Date.now(); if (now - wheelAt.current < 120) return; wheelAt.current = now; step(e.deltaY + e.deltaX > 0 ? 1 : -1) }}>
+              // the mouse wheel selects the next or previous tab, one per notch (at most every 120 ms), in the strip's own
+              // order (tabs can be dragged); the chosen one slides into view
+              onWheel={(e) => {
+                const now = Date.now(); if (now - wheelAt.current < 120) return; wheelAt.current = now
+                setTip(null)
+                const tabs = [...(strip()?.querySelectorAll('[data-tab]') ?? [])], at = tabs.findIndex((b) => b.dataset.tab === tab) // each tab sits in Sortable's wrapper
+                const to = tabs[Math.max(0, Math.min(tabs.length - 1, at + (e.deltaY + e.deltaX > 0 ? 1 : -1)))]
+                if (to && to !== tabs[at]) { to.click(); to.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' }) }
+              }}>
             <Sortable name="tabs" className="flex gap-1.5 overflow-hidden" onScroll={readEdges}>
             {Object.entries(TABS()).map(([id, label, I = tabIcon(id)]) => (
-              <button key={id} onClick={() => { setTab(id); save('tab', id) }} aria-label={t(label)}
+              <button key={id} data-tab={id} onClick={() => { setTab(id); save('tab', id) }} aria-label={t(label)}
                 // the name in a small label under the icon (native tooltips don't show in these see-through windows)
                 onMouseEnter={(e) => { const r = e.currentTarget.getBoundingClientRect(); setTip({ text: t(label), x: r.left + r.width / 2, y: r.bottom + 6 }) }}
                 onMouseLeave={() => setTip(null)}
@@ -278,17 +282,15 @@ export default function Notch() {
             ))}
             </Sortable>
             </div>
-            {edges.r && <button title={t('Next')} onClick={() => step(1)} className="rounded-full bg-card/80 p-1 text-muted hover:text-white"><ChevronRight size={16} /></button>}
+            {/* the arrows go straight to either end of the strip */}
+            {edges.r && <button title={t('Next')} onClick={() => { setTip(null); strip()?.scrollTo({ left: strip().scrollWidth, behavior: 'smooth' }) }} className="rounded-full bg-card/80 p-1 text-muted hover:text-white"><ChevronRight size={16} /></button>}
             <button title={t('Dashboard (Ctrl+Alt+H)')} className="rounded-full p-2 text-muted hover:text-white" onClick={() => window.art?.overlay.toggle()}><Layers size={16} /></button>
+            {/* these fold away; the dashboard, the mic and the pin always stay */}
+            {!folded && <>
             <button title={t('Circle to Ask')} className="rounded-full p-2 text-muted hover:text-white" onClick={() => window.art?.grab.start('ask')}><Sparkles size={16} /></button>
             <button title={t('Screen grab')} className="rounded-full p-2 text-muted hover:text-white" onClick={() => window.art?.grab.start()}><Crop size={16} /></button>
             <button title={t('Tray icons (shows the taskbar for a moment)')} className="rounded-full p-2 text-muted hover:text-white"
               onClick={() => window.art?.showTray()}><ChevronsUp size={16} /></button>
-            {/* the mic opens the tile tab that has the talk card (house.json "talk": true) and starts listening */}
-            {talkTab && <button title={t('Talk to {a}')} className="ml-auto rounded-full p-2 text-accent hover:brightness-125"
-              onClick={() => { setTab(talkTab); save('tab', talkTab); setTimeout(() => dispatchEvent(new Event('jarvis-listen')), 400) }}>
-              <Mic size={16} />
-            </button>}
             <div className="relative">
               <button onClick={() => setShowLook(!showLook)} title={t('Look')} className={`rounded-full p-2 ${showLook ? 'text-accent' : 'text-muted hover:text-white'}`}>
                 <Settings2 size={16} />
@@ -314,6 +316,14 @@ export default function Notch() {
                 </div>
               )}
             </div>
+            </>}
+            <button onClick={() => fold(!folded)} title={t(folded ? 'Show the tools' : 'Hide the tools')} className="rounded-full p-1 text-muted hover:text-white">
+              {folded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}</button>
+            {/* the mic opens the tile tab that has the talk card (house.json "talk": true) and starts listening */}
+            {talkTab && <button title={t('Talk to {a}')} className="rounded-full p-2 text-accent hover:brightness-125"
+              onClick={() => { setTab(talkTab); save('tab', talkTab); setTimeout(() => dispatchEvent(new Event('jarvis-listen')), 400) }}>
+              <Mic size={16} />
+            </button>}
             <button onClick={togglePin} title={t(pinned ? 'Unpin (auto-hide again)' : 'Pin open')}
               className={`rounded-full p-2 ${pinned ? 'text-accent' : 'text-muted hover:text-white'}`}>
               {pinned ? <Pin size={16} /> : <PinOff size={16} />}

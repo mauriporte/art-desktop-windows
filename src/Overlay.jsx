@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Droplet, MousePointerClick, MousePointerBan, Pin, PinOff, LockKeyhole, LockKeyholeOpen, CalendarDays, ChevronRight, Lightbulb, ToggleLeft, Fan, Sparkles, ScrollText, CircleDot, Gauge, Activity, Blinds, Lock, Thermometer, Pencil, Check, X, Plus, Search, MoveDiagonal2 } from 'lucide-react'
 import Sortable from './Sortable.jsx'
 import Screens from './Screens.jsx'
+import { house } from './house.js'
 import { Switch } from './HaTiles.jsx'
 import { load, save } from './slider.js'
 import { t, useLang, words, locale } from './i18n.js'
@@ -269,9 +270,16 @@ function ProjectsPanel({ close }) {
 
 // ADB Control / Stream Control (an entry with "screens": "ADB" | "Stream"): its device switches on top, as in HA, and the
 // live device screens underneath (the notch's Screens view)
+// ADB Control's screen switch for a device's ADB switch: switch.adb_<x> -> switch.pantalla_<x> (HA's "Pantalla" sliders)
+const screenOf = (a) => a.entity.replace(/^switch\.adb_/, 'switch.pantalla_')
 function ScreensPanel({ server, close, flash }) {
   const [states, setStates] = useState({})
-  const read = () => ha('states', server.apps.map((a) => a.entity)).then((r) => r.value && setStates(r.value))
+  const [view, setView] = useState([]) // ADB Control's devices: shown, battery
+  const beans = server.screens === 'ADB'
+  const read = () => {
+    ha('states', [...server.apps.map((a) => a.entity), ...(beans ? server.apps.map(screenOf) : [])]).then((r) => r.value && setStates(r.value))
+    if (beans && house.adbControl?.api) fetch(`${house.adbControl.api}/viewdata`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json()).then((j) => setView(j.devices)).catch(() => {})
+  }
   useEffect(() => { read(); const id = setInterval(read, 2000); return () => clearInterval(id) }, [server])
   return (
     <div className="absolute inset-0 z-20" onClick={close}>
@@ -293,7 +301,17 @@ function ScreensPanel({ server, close, flash }) {
             )
           })}
         </div>
-        <div className="min-h-0 flex-1"><Screens only={server.screens} /></div>
+        {/* one bean per device under the sliders: its screen in ADB Control, on = orange; the frames below follow */}
+        {beans && <div className="flex shrink-0 flex-wrap gap-2">
+          {server.apps.filter((a) => states[screenOf(a)]).map((a) => {
+            const on = states[screenOf(a)].state === 'on', battery = view.find((d) => d.name === a.name)?.battery
+            return <button key={a.entity} onClick={() => ha('call', 'switch', 'toggle', { entity_id: screenOf(a) }).then((r) => { if (r.error) flash(r.error); read() })}
+              className="flex h-[34px] items-center gap-2 rounded-full px-3.5 text-[13px] font-bold"
+              style={on ? { background: '#E8650A', color: '#000' } : { background: 'rgba(255,255,255,.12)', color: '#c9cbd3' }}>
+              {a.name}{battery != null && <span className="opacity-75">{battery}%</span>}</button>
+          })}
+        </div>}
+        <div className="min-h-0 flex-1"><Screens only={server.screens} tick={beans ? view.filter((d) => d.shown !== false).map((d) => d.ip).join() : undefined} /></div>
       </div>
     </div>
   )

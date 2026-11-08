@@ -84,6 +84,18 @@ const SCRCPY_CSS = [
   '.control-wrapper>input:checked+label{background:#E8650A}', '.control-wrapper>input:checked+label>svg{fill:#050505!important}',
 ].join('')
 
+// embedded ws-scrcpy screens (the notch's Screens tab, the dashboard's ADB panel): its device buttons restyled in the
+// A.R.T. look (round, near-black, orange when pressed), packed so the whole column fits, no scrollbars
+function styleFrames(wc) {
+  wc.on('did-frame-finish-load', (_e, isMain, pid, rid) => {
+    const f = !isMain && webFrameMain.fromId(pid, rid)
+    const adb = house().adbControl, host = (u) => { try { return new URL(u).hostname } catch { return '' } }
+    if (f && adb?.scrcpy && host(f.url) === host(adb.scrcpy)) f.executeJavaScript(`document.head.insertAdjacentHTML('beforeend', '<style>${SCRCPY_CSS}</style>')`).catch(() => {})
+    // the VNC Control viewer (the Linux desktop): no scrollbars either
+    else if (f && /vnc-control/.test(f.url)) f.executeJavaScript(`document.head.insertAdjacentHTML('beforeend', '<style>::-webkit-scrollbar{display:none}</style>')`).catch(() => {})
+  })
+}
+
 // the dock's visible, clickable part: the strip along its edge, or the whole window while a stack is open
 function dockShape(w, s) {
   if (w.expanded) return [{ x: 0, y: 0, width: s.w, height: s.h }]
@@ -190,15 +202,7 @@ function createSlider(kind, display, edge) {
     if (e.level === 'error' || e.level === 'warning') fs.appendFile(path.join(require('os').homedir(), '.config', 'art-desktop', 'app.log'),
       `${new Date().toISOString()} ${kind} ${e.level}: ${e.message}\n`, () => {})
   })
-  // embedded ws-scrcpy screens (Screens tab): its device buttons restyled in the A.R.T. look (round, near-black,
-  // orange when pressed), packed so the whole column fits, no scrollbars
-  win.webContents.on('did-frame-finish-load', (_e, isMain, pid, rid) => {
-    const f = !isMain && webFrameMain.fromId(pid, rid)
-    const adb = house().adbControl, host = (u) => { try { return new URL(u).hostname } catch { return '' } }
-    if (f && adb?.scrcpy && host(f.url) === host(adb.scrcpy)) f.executeJavaScript(`document.head.insertAdjacentHTML('beforeend', '<style>${SCRCPY_CSS}</style>')`).catch(() => {})
-    // the VNC Control viewer (the Linux desktop): no scrollbars either
-    else if (f && /vnc-control/.test(f.url)) f.executeJavaScript(`document.head.insertAdjacentHTML('beforeend', '<style>::-webkit-scrollbar{display:none}</style>')`).catch(() => {})
-  })
+  styleFrames(win.webContents)
 }
 
 ipcMain.on('panel:pinned', (e, on) => {
@@ -842,6 +846,7 @@ function toggleOverlay() {
     alwaysOnTop: true, show: false, roundedCorners: false, thickFrame: false, backgroundColor: '#00000000',
     webPreferences: { preload: path.join(__dirname, 'preload.cjs') } })
   overlayWin.setAlwaysOnTop(true, 'floating')
+  styleFrames(overlayWin.webContents)
   overlayWin.setBounds(b)
   overlayWin.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), { query: { view: 'overlay' } })
   overlayWin.once('ready-to-show', () => { overlayWin.show(); if (overlayConf().pinned) pinOverlay(true); else overlayWin.focus() })

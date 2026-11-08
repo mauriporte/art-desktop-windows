@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { t } from './i18n.js'
 import { house } from './house.js'
 import { ExternalLink, RefreshCw, MoonStar, Plus } from 'lucide-react'
@@ -14,6 +14,41 @@ function scrcpyLink(ip) {
   const udid = `${ip}:5555`
   const ws = SCRCPY().replace(/^http/, 'ws') + `?action=proxy-adb&remote=tcp%3A8886&udid=${encodeURIComponent(udid)}`
   return SCRCPY() + '#!' + new URLSearchParams({ action: 'stream', udid, player: 'mse', ws, fitToScreen: 'true' })
+}
+
+// a landscape screen takes a whole row, portrait screens go two to a row; each frame is the screen's own shape plus
+// ws-scrcpy's button column, so the picture fills it
+const FRAME = 60, GAP = 8
+function ScreenGrid({ devs, error }) {
+  const box = useRef()
+  const [w, setW] = useState(0)
+  useEffect(() => {
+    const o = new ResizeObserver(([e]) => setW(e.contentRect.width))
+    if (box.current) o.observe(box.current)
+    return () => o.disconnect()
+  }, [])
+  const frame = (d, width) => (
+    <iframe key={d.ip} src={scrcpyLink(d.ip)} title={d.name || d.model} allow="autoplay" className="rounded-xl bg-black"
+      style={{ width, height: Math.round(d.landscape ? (width - FRAME) / d.aspect : (width - FRAME) * d.aspect) }} />
+  )
+  const rows = []
+  let pair = []
+  for (const d of devs ?? []) {
+    if (d.landscape) rows.push([d])
+    else if (pair.push(d) === 2) { rows.push(pair); pair = [] }
+  }
+  if (pair.length) rows.push(pair)
+  return (
+    <div ref={box} className="flex h-full flex-col gap-2 overflow-y-auto">
+      {error && <p className="text-sm text-muted">{error}</p>}
+      {devs && !devs.length && <p className="text-sm text-muted">{t('No device is connected to ADB Control.')}</p>}
+      {w > 0 && rows.map((r) => (
+        <div key={r.map((d) => d.ip).join()} className="flex shrink-0" style={{ gap: GAP }}>
+          {r.map((d) => frame(d, r[0].landscape ? w : Math.floor((w - GAP) / 2)))}
+        </div>
+      ))}
+    </div>
+  )
 }
 
 // HA's VNC connector: name, address, port, optional password and screen resolution; add/update or remove by name
@@ -43,7 +78,7 @@ function VncForm({ done }) {
 }
 
 // only = one mode, without the mode chips (the dashboard's ADB / Stream panels)
-export default function Screens({ only }) {
+export default function Screens({ only, tick }) {
   // the modes this house has: ADB Control / Stream Control need adbControl, VNC needs vnc
   const modes = only ? [only] : [...(house.adbControl ? ['ADB', 'Stream'] : []), ...(house.vnc ? ['VNC'] : [])]
   const [mode, setMode] = useState(modes[0])
@@ -58,7 +93,10 @@ export default function Screens({ only }) {
     .then((r) => r.json()).then((j) => { setDevs(j.devices.filter((d) => d.shown !== false)); setError('') })
     .catch((e) => setError(`${t('ADB Control not reachable')} (${e.message})`))
   useEffect(() => { setDevs(null); setVnc(null); load() }, [mode])
+  useEffect(() => { if (tick !== undefined) load() }, [tick]) // the panel saw the set of shown screens change
 
+  // the dashboard's ADB panel: every shown screen at once, sized to its own shape
+  if (only === 'ADB') return <ScreenGrid devs={devs} error={error} />
   const d = devs?.find((x) => x.ip === pick) ?? devs?.[0]
   const src = mode === 'VNC' ? (vnc?.up && vnc.url) : d && (mode === 'Stream' ? d.player : scrcpyLink(d.ip))
   const chip = (on) => `whitespace-nowrap rounded-full px-3 py-1 text-sm ${on ? 'bg-accent font-semibold text-ink' : 'bg-card text-[#c9cbd3]'}`
