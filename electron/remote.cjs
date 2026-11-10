@@ -266,4 +266,15 @@ async function haAskImage(png, question) {
   } finally { haWs({ type: 'media_source/local_source/remove', media_content_id: id }).catch(() => {}) }
 }
 
-module.exports = { haTodoItems, haTodoDone, haNotifications, haDismiss, haCalendars, haEvents, haEntities, haAskImage, jrStore, jrSave, haUrl, haStates, haTorrents, haNowPlaying, jrNow, jrMedia, haCamera, haImage, haMusic, haCall, vnc, vncAdd, vncRemove, devices, press, text, link, openOnTv, jrPairStart, jrPairFinish, jrSign, REMOTE_KEYS, JR_KEYS }
+// the shared dashboard (house.json "overlayMaster", an address; HA token as the key): every device's overlay.json shares
+// its tiles and servers with it. No address or no token: nothing shared, the local file alone
+async function master(body) {
+  const h = ha(), u = require('./house.cjs')().overlayMaster
+  if (!u || !h.ok) return null
+  const r = await fetch(u, { method: body ? 'PUT' : 'GET', signal: AbortSignal.timeout(8000),
+    headers: { Authorization: `Bearer ${h.token}`, 'Content-Type': 'application/json' }, ...(body && { body: JSON.stringify(body) }) })
+  if (!r.ok) throw new Error(`overlay master ${r.status}`)
+  return body ? true : r.json()
+}
+
+module.exports = { master, haTodoItems, haTodoDone, haNotifications, haDismiss, haCalendars, haEvents, haEntities, haAskImage, jrStore, jrSave, haUrl, haStates, haTorrents, haNowPlaying, jrNow, jrMedia, haCamera, haImage, haMusic, haCall, vnc, vncAdd, vncRemove, devices, press, text, link, openOnTv, jrPairStart, jrPairFinish, jrSign, REMOTE_KEYS, JR_KEYS }

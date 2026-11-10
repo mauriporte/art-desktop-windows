@@ -833,6 +833,12 @@ let overlayWin = null
 // pinned (overlay.json "pinned"): it stays open behind the other windows, like a desktop layer, and comes back when
 // the app starts; unpinned it floats on top and closes when you're done
 const overlayConf = () => { try { const d = JSON.parse(fs.readFileSync(OVERLAY, 'utf8')); return Array.isArray(d) ? { tiles: d } : d } catch { return { tiles: [] } } }
+const writeOverlay = (d) => { fs.mkdirSync(path.dirname(OVERLAY), { recursive: true }); fs.writeFileSync(OVERLAY, JSON.stringify(d, null, 1)) }
+const overlayLog = (e) => fs.appendFile(path.join(path.dirname(OVERLAY), 'app.log'), `${new Date().toISOString()} ${e.message}
+`, () => {})
+// the shared master (remote.master): read at start into the local file, which stays the cache and the fallback
+const { fromMaster, toMaster } = require('./overlay-merge.cjs')
+async function pullMaster() { try { const m = await remote.master(); if (m) writeOverlay(fromMaster(overlayConf(), m)) } catch (e) { overlayLog(e) } }
 function pinOverlay(on) {
   if (!overlayWin || overlayWin.isDestroyed()) return
   overlayWin.setAlwaysOnTop(!on, 'floating')
@@ -852,8 +858,8 @@ function toggleOverlay() {
   overlayWin.once('ready-to-show', () => { overlayWin.show(); if (overlayConf().pinned) pinOverlay(true); else overlayWin.focus() })
   overlayWin.on('blur', () => overlayConf().pinned && pinOverlay(true)) // pinned: back behind the windows after a click
 }
-ipcMain.on('overlay:pin', (_e, on) => { const d = overlayConf(); d.pinned = !!on; fs.writeFileSync(OVERLAY, JSON.stringify(d, null, 1)); pinOverlay(!!on) })
-app.whenReady().then(() => { if (overlayConf().pinned) setTimeout(toggleOverlay, 3000) })
+ipcMain.on('overlay:pin', (_e, on) => { const d = overlayConf(); d.pinned = !!on; writeOverlay(d); pinOverlay(!!on) })
+app.whenReady().then(async () => { await pullMaster(); if (overlayConf().pinned) setTimeout(toggleOverlay, 3000) })
 ipcMain.on('overlay:toggle', toggleOverlay)
 // the usable area changed (a dock reserved or released its strip, or the taskbar moved): the dashboard re-fits, or its
 // right edge, with the side panels' X, ends up under a reserved dock
@@ -882,10 +888,13 @@ ipcMain.on('overlay:talk', () => {
   if (w) { place(w, true); w.win.webContents.send('notch:opened'); w.win.webContents.send('notch:talk') }
 })
 ipcMain.handle('overlay:tiles', () => overlayConf())
-ipcMain.handle('overlay:save', (_e, list) => {
+ipcMain.handle('overlay:save', async (_e, list) => {
   // { tiles: [...], servers: [...] }; navigation tiles have no entity
   if (!Array.isArray(list?.tiles) || !list.tiles.every((x) => typeof (x?.entity ?? x?.nav) === 'string')) return
-  fs.mkdirSync(path.dirname(OVERLAY), { recursive: true }); fs.writeFileSync(OVERLAY, JSON.stringify(list, null, 1))
+  const before = overlayConf()
+  writeOverlay(list)
+  // the edit goes into the master too, so the other devices get it
+  try { const m = await remote.master(); if (m) await remote.master(toMaster(m, before, list)) } catch (e) { overlayLog(e) }
 })
 ipcMain.handle('ha:entities', wrap(() => remote.haEntities()))
 ipcMain.handle('ha:calendars', wrap(() => remote.haCalendars()))
