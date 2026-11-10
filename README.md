@@ -30,7 +30,7 @@ and scroll with the arrows or the mouse wheel. Pin it to keep it open; the gear 
 
 **Header tools**: a **screen grabber** (drag an area, click a window or take the whole screen; annotate with arrow,
 box, text, blur and highlight; copy, save or pin it on top), **Circle to Ask** (draw round anything on screen and
-ask about it: a local Ollama vision model, Claude through the Claude Code CLI, or Gemini through Home Assistant),
+ask about it: an Ollama vision model on your home server, Claude through the Claude Code CLI, or Gemini through Home Assistant),
 a tray button, and a mic for your Home Assistant voice assistant.
 
 **Dock** (one per screen, any edge). Your taskbar's pinned apps plus its own pins ("Keep in dock"), running apps, stacks
@@ -78,7 +78,7 @@ taskbar back), then delete the folder.
 
 - **Wallpaper across screens**: `wallpaper\compose-span.py` cuts a picture to your screen layout and
   `wallpaper\set-span.ps1` sets it spanned over every screen, with the lock screen set to the main screen's part.
-- **Circle to Ask**: Ollama with a vision model (e.g. `ollama pull qwen3.5:4b`), and/or the Claude Code CLI signed in,
+- **Circle to Ask**: an Ollama server on your network with a vision model (e.g. `ollama pull qwen3.5:4b`), its address in house.json `"ollama"`, and/or the Claude Code CLI signed in,
   and/or Home Assistant's Google Generative AI integration (AI Task).
 - **Claude tab**: add the hooks from `electron/claude-hook.cjs` to Claude Code's settings (see the comments there).
 

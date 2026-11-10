@@ -124,7 +124,7 @@ function setup({ loadPage, hideNotch, windowRects }) {
     return p
   })
   ipcMain.handle('grab:pin', (e, url) => { const b = BrowserWindow.fromWebContents(e.sender)?.getBounds(); pin(url, b && { x: b.x, y: b.y }) })
-  // ask Ollama (house.json "ollama", its address; this PC's own by default) about the picture: answer pieces go back as
+  // ask Ollama (house.json "ollama", the house server's address; never one on this PC) about the picture: answer pieces go back as
   // 'ask:chunk' events, then 'ask:done'
   const asks = new Map() // sender id -> AbortController
   ipcMain.handle('ask:run', async (e, image, question, model) => {
@@ -139,7 +139,8 @@ function setup({ loadPage, hideNotch, windowRects }) {
       // Claude: the Claude Code CLI reading the picture from a scratch folder; no user
       // settings, hooks or MCP servers load, it only may Read, and no session is kept
       if (model === 'claude') { say(await askClaude(png, String(question).slice(0, 2000), stop.signal)); return { ok: true } }
-      const ollama = require('./house.cjs')().ollama || 'http://localhost:11434'
+      const ollama = require('./house.cjs')().ollama
+      if (!ollama) return { error: 'No Ollama address in house.json ("ollama")' }
       const r = await fetch(`${ollama}/api/chat`, { method: 'POST', signal: stop.signal, body: JSON.stringify({ model, stream: true, think: false,
         messages: [{ role: 'user', content: String(question).slice(0, 2000), images: [String(image).replace(/^data:image\/\w+;base64,/, '')] }] }) })
       if (!r.ok) return { error: `Ollama ${r.status}: ${(await r.text()).slice(0, 200)}` }

@@ -1,5 +1,5 @@
 {
-  "ollama": "http://localhost:11434",
+  "ollama": "http://192.168.1.30:11434",
   "overlayMaster": "",
   "_comment": "Copy to ~/.config/art-desktop/house.json and fill in what you have. Anything left out simply doesn't show.",
   "city": "London",
