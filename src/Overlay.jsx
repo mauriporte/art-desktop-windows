@@ -33,7 +33,7 @@ function Tile({ tile, s, edit, remove, flash, open, resize, projects, loaded, ce
   const toggles = ['light', 'switch', 'input_boolean', 'fan', 'cover', 'lock'].includes(domain) && !tile.action
   // orange, with a few exceptions: the alarm red, groups (a light/switch made of others) a darker orange, and a
   // colour named on the tile (the modes, the buttons)
-  const hue = domain === 'alarm_control_panel' ? '#f44336' : TONES[tile.color] ?? (s?.group ? '#B34700' : '#E8650A')
+  const hue = domain === 'alarm_control_panel' ? '#f44336' : TONES[tile.color] ?? (s?.group ? 'color-mix(in srgb, var(--color-accent), black 23%)' : 'var(--color-accent)')
   const lit = toggles ? on : !missing // things that aren't on/off always show in their colour
   const [img, setImg] = useState(null)
   useEffect(() => {
@@ -154,7 +154,27 @@ function Picker({ have, add, close }) {
 
 // the calendar tile: what's coming in the next two weeks from the chosen calendars; a chip per calendar shows or
 // hides it (kept on this PC)
-const CAL_TONES = ['#E8650A', '#29B6F6', '#AB47BC', '#66BB6A', '#FFC107', '#f44336', '#26C6DA', '#EC407A']
+// the A.R.T. accent: pick a colour, then where it applies: every device (the shared master), this one only, or back to
+// following the shared one. The chip that is lit says which one this device uses now
+function AccentPicker({ flash }) {
+  const [a, setA] = useState(null), [c, setC] = useState('#E8650A')
+  const read = () => window.art?.accent?.get().then((x) => { setA(x); setC(x.accent) })
+  useEffect(() => { read(); return window.art?.accent?.on(() => read()) }, [])
+  const apply = (scope) => window.art.accent.set(scope, c).then((r) => r?.error && flash(r.error))
+  const chip = (on) => `rounded-full px-2.5 py-0.5 text-xs ${on ? 'bg-accent font-semibold text-ink' : 'bg-white/10 text-[#c9cbd3] hover:text-white'}`
+  if (!a) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <input type="color" value={c} onChange={(e) => setC(e.target.value)} title={t('Accent')}
+        className="h-6 w-8 cursor-pointer rounded border-0 bg-transparent p-0" />
+      <button className={chip(!a.local && c === a.accent)} onClick={() => apply('all')}>{t('All devices')}</button>
+      <button className={chip(!!a.local && c === a.accent)} onClick={() => apply('device')}>{t('This device only')}</button>
+      {a.local && <button className={chip(false)} onClick={() => apply('follow')}>{t('Follow shared')}</button>}
+    </div>
+  )
+}
+
+const CAL_TONES =['#E8650A', '#29B6F6', '#AB47BC', '#66BB6A', '#FFC107', '#f44336', '#26C6DA', '#EC407A']
 export function CalendarTile({ edit, remove, open }) {
   const [cals, setCals] = useState([])
   const [events, setEvents] = useState(null)
@@ -199,7 +219,7 @@ export function CalendarTile({ edit, remove, open }) {
     <div onClick={() => edit && open()} className="relative flex h-full w-full flex-col gap-2 overflow-hidden rounded-2xl p-3 shadow-xl"
       style={{ background: 'rgba(58,58,62,calc(.55 * var(--glass, 1)))', boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,.10)' }}>
       <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: '#E8650A55' }}><CalendarDays size={18} /></span>
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: 'color-mix(in srgb, var(--color-accent) 33%, transparent)' }}><CalendarDays size={18} /></span>
         <span className="text-sm font-bold">{t('Calendar')}</span>
       </div>
       <div className="flex flex-wrap gap-1">{cals.map((c) => {
@@ -236,9 +256,9 @@ function ProjectsPanel({ close }) {
   useEffect(() => { window.art?.overlay.projects().then((r) => (r.error ? setError(r.error) : setD(r.value))) }, [])
   const ago = (iso) => { const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 60 ? `${m} min` : m < 1440 ? `${Math.round(m / 60)} h` : `${Math.round(m / 1440)} d` }
   const row = (key, on, title, sub, status, url) => (
-    <button key={key} onClick={() => window.art?.overlay.openUrl(url)} style={on ? { background: 'color-mix(in srgb, #E8650A calc(20% * var(--glass, 1)), transparent)', boxShadow: 'inset 0 0 0 2px #E8650A' } : { background: 'rgba(58,58,62,calc(.55 * var(--glass, 1)))', boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,.10)' }}
+    <button key={key} onClick={() => window.art?.overlay.openUrl(url)} style={on ? { background: 'color-mix(in srgb, var(--color-accent) calc(20% * var(--glass, 1)), transparent)', boxShadow: 'inset 0 0 0 2px var(--color-accent)' } : { background: 'rgba(58,58,62,calc(.55 * var(--glass, 1)))', boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,.10)' }}
       className="flex shrink-0 flex-col rounded-2xl px-3 py-2 text-left transition hover:brightness-110">
-      <span className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate text-sm font-bold">{title}</span><span className="shrink-0 text-xs" style={{ color: on ? '#E8650A' : '#8a8a8e' }}>{status}</span></span>
+      <span className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate text-sm font-bold">{title}</span><span className="shrink-0 text-xs" style={{ color: on ? 'var(--color-accent)' : '#8a8a8e' }}>{status}</span></span>
       {sub && <span className="truncate text-xs text-muted">{sub}</span>}
     </button>
   )
@@ -293,7 +313,7 @@ function ScreensPanel({ server, close, flash }) {
             const s = states[a.entity], on = s?.state === 'on'
             return (
               <div key={a.entity} className="flex items-center gap-2 rounded-2xl px-3 py-2"
-                style={on ? { background: 'color-mix(in srgb, #E8650A calc(20% * var(--glass, 1)), transparent)', boxShadow: 'inset 0 0 0 2px #E8650A' } : { background: 'rgba(58,58,62,calc(.55 * var(--glass, 1)))', boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,.10)' }}>
+                style={on ? { background: 'color-mix(in srgb, var(--color-accent) calc(20% * var(--glass, 1)), transparent)', boxShadow: 'inset 0 0 0 2px var(--color-accent)' } : { background: 'rgba(58,58,62,calc(.55 * var(--glass, 1)))', boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,.10)' }}>
                 <span className={`min-w-0 flex-1 truncate text-sm font-bold ${on ? 'text-white' : 'text-[#9e9e9e]'}`}>{a.name}</span>
                 <Switch on={on} disabled={!s || s.state === 'unavailable'}
                   onClick={() => ha('call', 'switch', 'toggle', { entity_id: a.entity }).then((r) => { if (r.error) flash(r.error); read() })} />
@@ -307,7 +327,7 @@ function ScreensPanel({ server, close, flash }) {
             const on = states[screenOf(a)].state === 'on', battery = view.find((d) => d.name === a.name)?.battery
             return <button key={a.entity} onClick={() => ha('call', 'switch', 'toggle', { entity_id: screenOf(a) }).then((r) => { if (r.error) flash(r.error); read() })}
               className="flex h-[34px] items-center gap-2 rounded-full px-3.5 text-[13px] font-bold"
-              style={on ? { background: '#E8650A', color: '#000' } : { background: 'rgba(255,255,255,.12)', color: '#c9cbd3' }}>
+              style={on ? { background: 'var(--color-accent)', color: '#000' } : { background: 'rgba(255,255,255,.12)', color: '#c9cbd3' }}>
               {a.name}{battery != null && <span className="opacity-75">{battery}%</span>}</button>
           })}
         </div>}
@@ -331,7 +351,7 @@ function SideBar({ title, count, close, children, wide }) {
     </div>
   )
 }
-const lit = (on) => (on ? { background: 'color-mix(in srgb, #E8650A calc(20% * var(--glass, 1)), transparent)', boxShadow: 'inset 0 0 0 2px #E8650A' } : { background: 'rgba(58,58,62,calc(.55 * var(--glass, 1)))', boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,.10)' })
+const lit = (on) => (on ? { background: 'color-mix(in srgb, var(--color-accent) calc(20% * var(--glass, 1)), transparent)', boxShadow: 'inset 0 0 0 2px var(--color-accent)' } : { background: 'rgba(58,58,62,calc(.55 * var(--glass, 1)))', boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,.10)' })
 const Head = ({ children }) => <div className="mt-1 shrink-0 text-xs font-semibold uppercase tracking-wide text-muted">{children}</div>
 
 // Seguridad: the alarm and the cameras, live
@@ -470,15 +490,15 @@ function ServerPanel({ server, close, flash }) {
           {server.apps.map((a) => {
             const s = states[a.entity], on = s?.state === 'on'
             return (
-              <button key={a.entity} onClick={() => tap(a)} style={on ? { background: 'color-mix(in srgb, #E8650A calc(20% * var(--glass, 1)), transparent)', boxShadow: 'inset 0 0 0 2px #E8650A' } : { background: 'rgba(58,58,62,calc(.55 * var(--glass, 1)))', boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,.10)' }}
+              <button key={a.entity} onClick={() => tap(a)} style={on ? { background: 'color-mix(in srgb, var(--color-accent) calc(20% * var(--glass, 1)), transparent)', boxShadow: 'inset 0 0 0 2px var(--color-accent)' } : { background: 'rgba(58,58,62,calc(.55 * var(--glass, 1)))', boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,.10)' }}
                 className={`flex shrink-0 items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition hover:brightness-110 ${armed === a.entity ? 'outline outline-2 outline-accent' : ''}`}>
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: on ? '#E8650A55' : 'rgba(255,255,255,.08)', color: on ? '#fff' : '#8a8a8e' }}>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: on ? 'color-mix(in srgb, var(--color-accent) 33%, transparent)' : 'rgba(255,255,255,.08)', color: on ? '#fff' : '#8a8a8e' }}>
                   {a.svg ? <svg viewBox="0 0 256 256" width="20" height="20" fill="currentColor" stroke="currentColor" dangerouslySetInnerHTML={{ __html: a.svg }} />
                     : a.icon ? <svg viewBox="0 0 24 24" width="20" height="20"><path d={a.icon} fill="currentColor" /></svg> : <CircleDot size={18} />}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className={`block truncate text-sm font-bold ${on ? 'text-white' : 'text-[#9e9e9e]'}`}>{armed === a.entity ? a.confirm : a.name ?? (s?.name ?? a.entity).replace(/ Contenedor$/i, '')}</span>
-                  <span className="block text-xs" style={{ color: on ? '#E8650A' : '#8a8a8e' }}>{!s ? '…' : s.state === 'unavailable' ? t('Unavailable') : t(server.readonly ? (on ? 'Online' : 'Offline') : on ? 'Running' : 'Stopped')}</span>
+                  <span className="block text-xs" style={{ color: on ? 'var(--color-accent)' : '#8a8a8e' }}>{!s ? '…' : s.state === 'unavailable' ? t('Unavailable') : t(server.readonly ? (on ? 'Online' : 'Offline') : on ? 'Running' : 'Stopped')}</span>
                 </span>
               </button>
             )
@@ -516,13 +536,13 @@ function ServerTile({ server, open }) {
   }, [server])
   const lit = info ? info.on : n > 0
   return (
-    <button onClick={open} style={lit ? { background: 'color-mix(in srgb, #E8650A calc(20% * var(--glass, 1)), transparent)', boxShadow: 'inset 0 0 0 2px #E8650A' } : { background: 'rgba(58,58,62,calc(.55 * var(--glass, 1)))', boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,.10)' }}
+    <button onClick={open} style={lit ? { background: 'color-mix(in srgb, var(--color-accent) calc(20% * var(--glass, 1)), transparent)', boxShadow: 'inset 0 0 0 2px var(--color-accent)' } : { background: 'rgba(58,58,62,calc(.55 * var(--glass, 1)))', boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,.10)' }}
       className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left shadow-xl transition hover:brightness-110" >
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: lit ? '#E8650A55' : 'rgba(255,255,255,.08)', color: lit ? '#fff' : '#8a8a8e' }}>
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: lit ? 'color-mix(in srgb, var(--color-accent) 33%, transparent)' : 'rgba(255,255,255,.08)', color: lit ? '#fff' : '#8a8a8e' }}>
         <svg viewBox="0 0 24 24" width="18" height="18"><path d={server.icon} fill="currentColor" /></svg></span>
       <span className="min-w-0 flex-1">
         <span className={`block truncate text-sm font-bold ${lit ? 'text-white' : 'text-[#9e9e9e]'}`}>{server.name}</span>
-        <span className="block text-xs" style={{ color: lit ? '#E8650A' : '#8a8a8e' }}>{info ? info.text : n == null ? '…' : `${n}/${server.apps.length} ${t(server.screens ? 'on' : server.readonly ? 'online' : 'running')}`}</span>
+        <span className="block text-xs" style={{ color: lit ? 'var(--color-accent)' : '#8a8a8e' }}>{info ? info.text : n == null ? '…' : `${n}/${server.apps.length} ${t(server.screens ? 'on' : server.readonly ? 'online' : 'running')}`}</span>
       </span>
       <ChevronRight size={16} className="text-muted" />
     </button>
@@ -573,8 +593,8 @@ export default function Overlay() {
   const fade = 0.1 + 0.9 * ((glass - 3) / 97)
   // a control: a small tile like the rest (orange outline while on), fading with them
   const ctl = `flex h-9 min-w-9 items-center justify-center rounded-xl px-2 transition hover:brightness-125 ${through ? '' : 'flex-1'}`
-  const ctlStyle = (on) => ({ opacity: fade, color: on ? '#E8650A' : '#d8d8d8', background: 'rgba(58,58,62,calc(.55 * var(--glass, 1)))',
-    boxShadow: on ? 'inset 0 0 0 2px #E8650A' : 'inset 0 0 0 1.5px rgba(255,255,255,.10)' })
+  const ctlStyle = (on) => ({ opacity: fade, color: on ? 'var(--color-accent)' : '#d8d8d8', background: 'rgba(58,58,62,calc(.55 * var(--glass, 1)))',
+    boxShadow: on ? 'inset 0 0 0 2px var(--color-accent)' : 'inset 0 0 0 1.5px rgba(255,255,255,.10)' })
   const [msg, setMsg] = useState('')
   const flash = (m) => { setMsg(m); setTimeout(() => setMsg(''), 4000) }
   useEffect(() => { window.art?.overlay.tiles().then((d) => { setTiles(d.tiles ?? []); setServers(d.servers ?? []); setPinned(!!d.pinned); setLocked(!!d.locked); setThrough(!!d.through); window.art?.overlay.through(!!d.through) }) }, [])
@@ -640,13 +660,14 @@ export default function Overlay() {
           {/* the see-through slider, a tile like the ones above, always at the bottom of this column (the dashboard's
               bottom-right corner) */}
           <div className="mt-auto flex flex-col gap-2 rounded-2xl px-3 py-2.5 shadow-xl transition-opacity"
-            style={{ opacity: fade, background: 'rgba(58,58,62,calc(.55 * var(--glass, 1)))', boxShadow: 'inset 0 0 0 2px #E8650A' }}>
+            style={{ opacity: fade, background: 'rgba(58,58,62,calc(.55 * var(--glass, 1)))', boxShadow: 'inset 0 0 0 2px var(--color-accent)' }}>
             <div className="flex items-center gap-3">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg text-white" style={{ background: 'color-mix(in srgb, #E8650A calc(35% * var(--glass, 1) + 20%), transparent)' }}><Droplet size={18} /></span>
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg text-white" style={{ background: 'color-mix(in srgb, var(--color-accent) calc(35% * var(--glass, 1) + 20%), transparent)' }}><Droplet size={18} /></span>
               <span className="min-w-0 flex-1"><span className="block text-sm font-bold">{t('Glass')} ↔ {t('Solid')}</span>
                 <span className="block text-xs text-accent">{glass}%</span></span>
             </div>
-            <input type="range" min="3" max="100" value={glass} className="w-full accent-[#E8650A]" onChange={(e) => { setGlass(Number(e.target.value)); save('overlayGlass', e.target.value) }} />
+            <input type="range" min="3" max="100" value={glass} className="w-full accent-accent" onChange={(e) => { setGlass(Number(e.target.value)); save('overlayGlass', e.target.value) }} />
+            <AccentPicker flash={flash} />
           </div>
         </div>
         </div>

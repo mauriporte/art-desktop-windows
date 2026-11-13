@@ -3,6 +3,7 @@ import { ArrowLeft, Brain, Map as MapIcon, Search } from 'lucide-react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { t } from './i18n.js'
+import { useAccent, accentNow } from './accent.js'
 
 const open = (n) => window.art?.ideas.open(n.id)
 
@@ -32,6 +33,7 @@ function NoteList({ notes, title, back }) {
 
 // the collections as a mind map round the whole: each bubble sized by how many ideas it holds
 function BrainMap({ notes, pick }) {
+  const accent = useAccent()?.accent || accentNow()
   const groups = useMemo(() => {
     const m = {}
     for (const n of notes) (m[n.collection] ||= []).push(n)
@@ -44,14 +46,14 @@ function BrainMap({ notes, pick }) {
   })
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full">
-      {nodes.map((n) => <line key={n.name} x1={cx} y1={cy} x2={n.x} y2={n.y} stroke="#E8650A" strokeOpacity=".35" />)}
+      {nodes.map((n) => <line key={n.name} x1={cx} y1={cy} x2={n.x} y2={n.y} stroke={accent} strokeOpacity=".35" />)}
       {nodes.map((n) => (
         <g key={n.name} className="cursor-pointer" onClick={() => pick(n.name, n.list)}>
-          <circle cx={n.x} cy={n.y} r={n.r} fill="#1C1C1E" stroke="#E8650A" strokeWidth="1.5" className="transition hover:fill-[#E8650A]" />
-          <text x={n.x} y={n.y + 4} textAnchor="middle" fill="#E8650A" fontSize="11" fontWeight="700" pointerEvents="none">{n.list.length}</text>
+          <circle cx={n.x} cy={n.y} r={n.r} fill="#1C1C1E" stroke={accent} strokeWidth="1.5" className="transition hover:fill-accent" />
+          <text x={n.x} y={n.y + 4} textAnchor="middle" fill={accent} fontSize="11" fontWeight="700" pointerEvents="none">{n.list.length}</text>
         </g>
       ))}
-      <circle cx={cx} cy={cy} r="38" fill="#E8650A" />
+      <circle cx={cx} cy={cy} r="38" fill={accent} />
       <text x={cx} y={cy - 2} textAnchor="middle" fill="#050505" fontSize="14" fontWeight="800">{t('Ideas')}</text>
       <text x={cx} y={cy + 15} textAnchor="middle" fill="#050505" fontSize="12" fontWeight="600">{notes.length}</text>
       {/* the collection names last, so they sit on top of every bubble and line */}
@@ -66,6 +68,7 @@ function BrainMap({ notes, pick }) {
 // every note with a place, as orange dots on a dark map (places are looked up once, then kept)
 function IdeasMap({ notes }) {
   const box = useRef(), map = useRef(), layer = useRef()
+  const accent = useAccent()?.accent || accentNow()
   const [geo, setGeo] = useState({ geo: {}, pending: null })
   useEffect(() => {
     const read = () => window.art?.ideas.geo().then(setGeo)
@@ -82,10 +85,10 @@ function IdeasMap({ notes }) {
     for (const n of notes) {
       const p = n.place && geo.geo[n.place]
       if (!p) continue
-      L.circleMarker(p, { radius: 6, color: '#E8650A', weight: 2, fillColor: '#E8650A', fillOpacity: 0.55 })
+      L.circleMarker(p, { radius: 6, color: accent, weight: 2, fillColor: accent, fillOpacity: 0.55 })
         .bindTooltip(`<b>${n.title.replace(/</g, '&lt;')}</b><br>${t(n.collection)}`).on('click', () => open(n)).addTo(layer.current)
     }
-  }, [geo, notes])
+  }, [geo, notes, accent])
   const placed = notes.filter((n) => n.place && geo.geo[n.place]).length
   return (
     <div className="relative h-full overflow-hidden rounded-2xl">

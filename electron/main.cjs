@@ -72,16 +72,16 @@ function dockEdge(d, all) {
   try { const e = JSON.parse(fs.readFileSync(DOCK_CONF, 'utf8'))[screenKey(d)]; if (e) return e } catch {}
   return d.bounds.x === Math.min(...all.map((x) => x.bounds.x)) ? 'left' : 'right'
 }
-const SCRCPY_CSS = [
+const SCRCPY_CSS = (accent) => [
   '::-webkit-scrollbar{display:none}', 'html,body{overflow:hidden!important;background:#000}',
   '.control-buttons-list{overflow:hidden!important;justify-content:space-evenly;align-items:center;padding:.4rem 0;box-sizing:border-box;background:#000!important}',
   '.control-button{margin:0!important;flex-shrink:0;width:1.95rem!important;height:1.95rem!important;border-radius:999px;background:#1C1C1E!important;opacity:1!important;display:flex;align-items:center;justify-content:center}',
-  '.control-button>svg{fill:#d8d8d8!important;width:60%;height:60%}', '.control-button:hover>svg{fill:#E8650A!important}',
-  '.control-button:active{background:#E8650A!important}', '.control-button:active>svg{fill:#050505!important}',
+  '.control-button>svg{fill:#d8d8d8!important;width:60%;height:60%}', `.control-button:hover>svg{fill:${accent}!important}`,
+  `.control-button:active{background:${accent}!important}`, '.control-button:active>svg{fill:#050505!important}',
   // the keyboard toggle is a hidden checkbox + label, not a .control-button: same look, orange while on
   '.control-wrapper>label{margin:0!important;flex-shrink:0;width:1.95rem;height:1.95rem;border-radius:999px;background:#1C1C1E;display:flex!important;align-items:center;justify-content:center;cursor:pointer}',
-  '.control-wrapper>label>svg{fill:#d8d8d8!important;width:60%;height:60%}', '.control-wrapper>label:hover>svg{fill:#E8650A!important}',
-  '.control-wrapper>input:checked+label{background:#E8650A}', '.control-wrapper>input:checked+label>svg{fill:#050505!important}',
+  '.control-wrapper>label>svg{fill:#d8d8d8!important;width:60%;height:60%}', `.control-wrapper>label:hover>svg{fill:${accent}!important}`,
+  `.control-wrapper>input:checked+label{background:${accent}}`, '.control-wrapper>input:checked+label>svg{fill:#050505!important}',
 ].join('')
 
 // embedded ws-scrcpy screens (the notch's Screens tab, the dashboard's ADB panel): its device buttons restyled in the
@@ -90,7 +90,7 @@ function styleFrames(wc) {
   wc.on('did-frame-finish-load', (_e, isMain, pid, rid) => {
     const f = !isMain && webFrameMain.fromId(pid, rid)
     const adb = house().adbControl, host = (u) => { try { return new URL(u).hostname } catch { return '' } }
-    if (f && adb?.scrcpy && host(f.url) === host(adb.scrcpy)) f.executeJavaScript(`document.head.insertAdjacentHTML('beforeend', '<style>${SCRCPY_CSS}</style>')`).catch(() => {})
+    if (f && adb?.scrcpy && host(f.url) === host(adb.scrcpy)) f.executeJavaScript(`document.head.insertAdjacentHTML('beforeend', '<style>${SCRCPY_CSS(accentOf().accent)}</style>')`).catch(() => {})
     // the VNC Control viewer (the Linux desktop): no scrollbars either
     else if (f && /vnc-control/.test(f.url)) f.executeJavaScript(`document.head.insertAdjacentHTML('beforeend', '<style>::-webkit-scrollbar{display:none}</style>')`).catch(() => {})
   })
@@ -838,7 +838,44 @@ const overlayLog = (e) => fs.appendFile(path.join(path.dirname(OVERLAY), 'app.lo
 `, () => {})
 // the shared master (remote.master): read at start into the local file, which stays the cache and the fallback
 const { fromMaster, toMaster } = require('./overlay-merge.cjs')
-async function pullMaster() { try { const m = await remote.master(); if (m) writeOverlay(fromMaster(overlayConf(), m)) } catch (e) { overlayLog(e) } }
+async function pullMaster() {
+  try {
+    const m = await remote.master(); if (!m) return
+    const d = fromMaster(overlayConf(), m)
+    if (HEX.test(m.accent ?? '')) d.accentShared = m.accent; else delete d.accentShared
+    writeOverlay(d); sendAccent()
+  } catch (e) { overlayLog(e) }
+}
+// the A.R.T. accent: this device's override (overlay.json "accent") || the shared one (the master's "accent", cached here
+// as "accentShared" for when .30 is away) || the original orange. Same keys and IPC as JLDM/JLDL (one shared design, 14/11)
+const HEX = /^#[0-9a-f]{6}$/i, ACCENT = '#E8650A'
+function accentOf() {
+  const d = overlayConf(), local = HEX.test(d.accent ?? '') ? d.accent : '', shared = HEX.test(d.accentShared ?? '') ? d.accentShared : ''
+  return { accent: local || shared || ACCENT, local, shared }
+}
+const sendAccent = () => { const a = accentOf(); for (const w of BrowserWindow.getAllWindows()) w.webContents.send('accent', a) }
+ipcMain.handle('accent:get', () => accentOf())
+ipcMain.handle('accent:set', wrap(async (scope, c) => {
+  if (scope !== 'follow' && !HEX.test(String(c))) throw new Error('Not a colour')
+  const d = overlayConf()
+  if (scope === 'all') {
+    // GET, change only the accent, PUT the rest back (a PUT replaces the whole master)
+    const m = await remote.master(); if (!m) throw new Error('No shared master')
+    await remote.master({ ...m, accent: c }); d.accentShared = c
+    delete d.accent // chosen for every device, so this one follows it too
+  } else if (scope === 'device') d.accent = c
+  else if (scope === 'follow') delete d.accent
+  else throw new Error('Not allowed')
+  writeOverlay(d); sendAccent()
+  return accentOf()
+}))
+// another device may change the shared accent: look again every 5 minutes (only the accent; tiles stay start-only)
+setInterval(async () => {
+  try {
+    const m = await remote.master(), a = HEX.test(m?.accent ?? '') ? m.accent : undefined, d = overlayConf()
+    if (m && a !== d.accentShared) { if (a) d.accentShared = a; else delete d.accentShared; writeOverlay(d); sendAccent() }
+  } catch {}
+}, 5 * 60 * 1000)
 function pinOverlay(on) {
   if (!overlayWin || overlayWin.isDestroyed()) return
   overlayWin.setAlwaysOnTop(!on, 'floating')
@@ -892,7 +929,8 @@ ipcMain.handle('overlay:save', async (_e, list) => {
   // { tiles: [...], servers: [...] }; navigation tiles have no entity
   if (!Array.isArray(list?.tiles) || !list.tiles.every((x) => typeof (x?.entity ?? x?.nav) === 'string')) return
   const before = overlayConf()
-  writeOverlay(list)
+  // the page sends only what it shows: this device's other keys (accent, accentShared) stay as they are in the file
+  writeOverlay({ ...before, ...list })
   // the edit goes into the master too, so the other devices get it
   try { const m = await remote.master(); if (m) await remote.master(toMaster(m, before, list)) } catch (e) { overlayLog(e) }
 })

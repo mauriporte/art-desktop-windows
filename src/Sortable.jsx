@@ -73,7 +73,7 @@ export default function Sortable({ name, className, style, onScroll, locked, chi
           <div key={k} data-sort={name} data-key={k} ref={(el) => (els.current[k] = el)}
             // a child with span={[w, h]} takes that many cells of a CSS grid
             style={c.props.span ? { gridColumn: `span ${c.props.span[0]}`, gridRow: `span ${c.props.span[1]}` } : undefined}
-            className={`grid ${dragging ? 'pointer-events-none z-20 rounded-2xl shadow-[0_0_16px_rgba(232,101,10,.6)]' : ''}`}
+            className={`grid ${dragging ? 'pointer-events-none z-20 rounded-2xl shadow-[0_0_16px_color-mix(in_srgb,var(--color-accent)_60%,transparent)]' : ''}`}
             onPointerDown={(e) => {
               if (e.button !== 0 || locked) return // locked: nothing moves
               // grab offset inside the tile, so it stays under the same spot of the cursor

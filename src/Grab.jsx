@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { MoveUpRight, Square, Type, Droplets, Highlighter, Undo2, Copy, Save, Pin, X, Sparkles, Send, Square as StopIcon } from 'lucide-react'
 import { load, save } from './slider.js'
 import { t, useLang } from './i18n.js'
-
-const ORANGE = '#E8650A'
+import { accentNow } from './accent.js'
 const useGrab = () => { const [g, setG] = useState(null); useEffect(() => { window.art?.grab.data().then(setG) }, []); return g }
 
 // one screen's overlay: its frozen picture; drag = a region, click = the window under the cursor (or the whole screen
@@ -67,8 +66,8 @@ function AskCircle({ g }) {
       onMouseUp={done} onContextMenu={() => window.art.grab.pick(null)}>
       <div className="pointer-events-none absolute inset-0 bg-black/30" />
       <svg className="pointer-events-none absolute inset-0" width={W} height={H}>
-        {pts && <polyline points={pts.map((q) => q.join(',')).join(' ')} fill="rgba(232,101,10,.12)" stroke="#E8650A" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"
-          style={{ filter: 'drop-shadow(0 0 6px rgba(232,101,10,.8))' }} />}
+        {pts && <polyline points={pts.map((q) => q.join(',')).join(' ')} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"
+          style={{ fill: 'color-mix(in srgb, var(--color-accent) 12%, transparent)', stroke: 'var(--color-accent)', filter: 'drop-shadow(0 0 6px color-mix(in srgb, var(--color-accent) 80%, transparent))' }} />}
       </svg>
       <div className="pointer-events-none absolute left-1/2 top-4 flex -translate-x-1/2 items-center gap-2 rounded-full bg-[#050505]/85 px-4 py-1.5 text-sm text-[#d8d8d8] ring-1 ring-white/10">
         <Sparkles size={14} className="text-accent" />{t('Circle anything to ask about it · Esc: cancel')}</div>
@@ -125,12 +124,13 @@ export function GrabAsk() {
 const TOOLS = [['arrow', MoveUpRight, 'Arrow'], ['box', Square, 'Box'], ['text', Type, 'Text'], ['blur', Droplets, 'Blur'], ['mark', Highlighter, 'Highlight']]
 function draw(ctx, img, shapes) {
   ctx.drawImage(img, 0, 0)
+  const ORANGE = accentNow() // the canvas needs a real colour: the accent as it is now
   const lw = Math.max(3, img.width / 400)
   for (const s of shapes) {
     const x = Math.min(s.x1, s.x2), y = Math.min(s.y1, s.y2), w = Math.abs(s.x2 - s.x1), h = Math.abs(s.y2 - s.y1)
     ctx.save()
     if (s.type === 'blur' && w > 1 && h > 1) { ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.filter = `blur(${Math.max(6, img.width / 150)}px)`; ctx.drawImage(img, 0, 0) }
-    if (s.type === 'mark') { ctx.fillStyle = 'rgba(232,101,10,.35)'; ctx.fillRect(x, y, w, h) }
+    if (s.type === 'mark') { ctx.fillStyle = ORANGE; ctx.globalAlpha = 0.35; ctx.fillRect(x, y, w, h) }
     if (s.type === 'box') { ctx.strokeStyle = ORANGE; ctx.lineWidth = lw; ctx.strokeRect(x, y, w, h) }
     if (s.type === 'arrow') {
       const a = Math.atan2(s.y2 - s.y1, s.x2 - s.x1), head = lw * 5

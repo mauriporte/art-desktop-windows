@@ -8,6 +8,9 @@ import { GrabSelect, GrabEdit, GrabPin, GrabAsk } from './Grab.jsx'
 import Overlay from './Overlay.jsx'
 import { query } from './slider.js'
 import { loadHouse } from './house.js'
+import { startAccent } from './accent.js'
+
+startAccent()
 
 // one page, three window kinds (electron/main.cjs passes ?view=)
 const WIDGETS = { spotify: SpotifyWidget }

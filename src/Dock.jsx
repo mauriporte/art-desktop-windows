@@ -146,7 +146,7 @@ export default function Dock() {
             onClick={() => { if (justDropped.current) return; it.run() }}
             onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); it.lnk ? window.art?.appMenu(it.lnk, pinned) : window.art?.dockMenu(it.stack, pinned) }}
             // orange glow + ring on the icon under the cursor (and on an open stack)
-            className={`relative flex shrink-0 items-center justify-center rounded-[22%] bg-card transition-[transform,box-shadow] duration-75 hover:shadow-[0_0_16px_rgba(232,101,10,.75)] hover:ring-1 hover:ring-accent ${it.active ? 'shadow-[0_0_16px_rgba(232,101,10,.75)] ring-1 ring-accent' : 'shadow-lg'} ${dragging ? 'z-10 ring-1 ring-accent shadow-[0_0_16px_rgba(232,101,10,.75)] !transition-none' : ''} ${dragDelta ? 'cursor-grabbing' : ''}`}
+            className={`relative flex shrink-0 items-center justify-center rounded-[22%] bg-card transition-[transform,box-shadow] duration-75 hover:shadow-[0_0_16px_color-mix(in_srgb,var(--color-accent)_75%,transparent)] hover:ring-1 hover:ring-accent ${it.active ? 'shadow-[0_0_16px_color-mix(in_srgb,var(--color-accent)_75%,transparent)] ring-1 ring-accent' : 'shadow-lg'} ${dragging ? 'z-10 ring-1 ring-accent shadow-[0_0_16px_color-mix(in_srgb,var(--color-accent)_75%,transparent)] !transition-none' : ''} ${dragDelta ? 'cursor-grabbing' : ''}`}
             // the bigger an icon is in the wave, the higher it sits: the hovered one is always on top of its neighbours
             style={{ width: tile, height: tile, transform: move, zIndex: dragging ? 100 : Math.round(s * 20) }}>
             {it.running && (
@@ -196,7 +196,7 @@ export default function Dock() {
           {stack.items.map((f) => (
             <button key={f.path} title={f.name} className="group flex flex-col items-center gap-1 rounded-xl p-1 hover:bg-white/5"
               onClick={() => openItem(f)}>
-              <img src={f.icon} draggable={false} className="h-14 w-14 rounded-lg object-contain group-hover:drop-shadow-[0_0_8px_rgba(232,101,10,.7)]" />
+              <img src={f.icon} draggable={false} className="h-14 w-14 rounded-lg object-contain group-hover:drop-shadow-[0_0_8px_color-mix(in_srgb,var(--color-accent)_70%,transparent)]" />
               <span className="w-full truncate text-center text-[11px] text-[#c9cbd3]">{f.name}</span>
             </button>
           ))}

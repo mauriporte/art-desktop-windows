@@ -128,7 +128,7 @@ export function SpotifyPlayer({ slide = false, scope }) {
       {s?.volume != null && (
         <label className="flex items-center gap-3 text-muted" style={noDrag}>
           <Volume1 size={16} />
-          <input type="range" min="0" max="100" defaultValue={Math.round(s.volume * 100)} className="flex-1 accent-[#E8650A]"
+          <input type="range" min="0" max="100" defaultValue={Math.round(s.volume * 100)} className="flex-1 accent-accent"
             onMouseUp={(e) => call('volume_set', { volume_level: Number(e.target.value) / 100 })} />
         </label>
       )}

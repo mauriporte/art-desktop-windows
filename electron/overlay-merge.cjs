@@ -13,9 +13,9 @@ function fromMaster(local, m) {
 }
 
 // this device's edit → master (shared keys only): changed and new entries replace or join it, the ones this edit removed
-// leave it, and entries only other devices show stay
+// leave it, and entries only other devices show stay; master keys this merge doesn't own (the accent) go back unchanged
 function toMaster(m, before, after) {
-  const d = {}
+  const d = { ...m }
   for (const [k, key] of Object.entries(SHARED)) {
     const now = new Map((after[k] ?? []).map((x) => [key(x), x]))
     const gone = new Set((before[k] ?? []).map(key).filter((x) => !now.has(x)))
@@ -38,8 +38,10 @@ if (require.main === module) { // self-check: node electron/overlay-merge.cjs
   assert.deepStrictEqual(got.tiles[1], { id: 't1', color: 'red' })
   assert.strictEqual(got.pinned, true)
   const after = { servers: [{ name: 'B', apps: [5] }, { name: 'Mine', apps: [] }], tiles: [{ id: 't2' }, { id: 't1' }, { id: 't3' }] }
-  const put = toMaster(m, got, after)
-  assert.deepStrictEqual(Object.keys(put), ['servers', 'tiles'])
+  const put = toMaster({ ...m, accent: '#123456' }, got, after)
+  assert.deepStrictEqual(Object.keys(put).sort(), ['accent', 'servers', 'tiles'])
+  assert.strictEqual(put.accent, '#123456') // a tile edit never wipes the shared accent
+  assert.strictEqual(toMaster(m, got, after).pinned, undefined) // local-only keys never reach the master
   assert.deepStrictEqual(put.servers.map((s) => s.name), ['B', 'Phone', 'Mine']) // A removed here, Phone kept, Mine joins
   assert.deepStrictEqual(put.servers[0].apps, [5])
   assert.deepStrictEqual(put.tiles.map((t) => t.id), ['t1', 't2', 't3'])

@@ -32,7 +32,7 @@ export default function Dashboards() {
         const Icon = ICONS[d.icon] ?? LayoutGrid
         return (
           <button key={d.path} onClick={() => setOpen(d)}
-            className="flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl bg-card/80 p-3 transition hover:shadow-[0_0_16px_rgba(232,101,10,.5)] hover:ring-1 hover:ring-accent">
+            className="flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl bg-card/80 p-3 transition hover:shadow-[0_0_16px_color-mix(in_srgb,var(--color-accent)_50%,transparent)] hover:ring-1 hover:ring-accent">
             <Icon size={28} className="text-accent" />
             <span className="truncate text-sm font-semibold">{t(d.name)}</span>
           </button>

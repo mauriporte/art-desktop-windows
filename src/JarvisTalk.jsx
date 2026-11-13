@@ -91,7 +91,7 @@ export default function JarvisTalk() {
           {inputs.filter((d) => d.deviceId && d.deviceId !== 'default').map((d) => <option key={d.deviceId} value={d.deviceId}>{d.label || t('Microphone')}</option>)}
         </select>
         <span>{t('Gain')} {boost}×</span>
-        <input type="range" min="1" max="8" step="0.5" value={boost} className="w-20 accent-[#E8650A]"
+        <input type="range" min="1" max="8" step="0.5" value={boost} className="w-20 accent-accent"
           onChange={(e) => { setBoost(Number(e.target.value)); save('micBoost', e.target.value) }} />
         {/* live input level while listening */}
         <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-accent transition-[width] duration-75" style={{ width: `${level * 100}%` }} /></div>

@@ -95,6 +95,12 @@ contextBridge.exposeInMainWorld('art', {
     pin: (url) => ipcRenderer.invoke('grab:pin', url),
     close: () => ipcRenderer.send('grab:close'),
   },
+  // the A.R.T. accent: { accent, shared, local }; set(scope 'all' | 'device' | 'follow', '#RRGGBB'); on(fn) gets the same object on every change
+  accent: {
+    get: () => ipcRenderer.invoke('accent:get'),
+    set: (scope, c) => ipcRenderer.invoke('accent:set', scope, c),
+    on: (fn) => { const h = (_e, c) => fn(c); ipcRenderer.on('accent', h); return () => ipcRenderer.off('accent', h) },
+  },
   ha: (op, ...a) => ipcRenderer.invoke('ha:' + op, ...a),
   remote: (op, ...a) => ipcRenderer.invoke('remote:' + op, ...a),
   setRadio: (kind, on) => ipcRenderer.invoke('radios:set', kind, on),

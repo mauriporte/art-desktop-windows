@@ -125,7 +125,7 @@ function Controls({ radios }) {
         <div className="flex items-center gap-3 rounded-2xl bg-card/70 px-4 py-3">
           <button title={q.mute ? t('Unmute') : t('Mute')} onClick={() => setQuick('mute', q.mute ? 0 : 1)} className={q.mute ? 'text-accent' : ''}>
             {q.mute ? <VolumeX size={20} /> : <Volume2 size={20} />}</button>
-          <input type="range" min="0" max="100" value={Math.round(q.vol * 100)} className="flex-1 accent-[#E8650A]"
+          <input type="range" min="0" max="100" value={Math.round(q.vol * 100)} className="flex-1 accent-accent"
             onChange={(e) => { const v = Number(e.target.value) / 100; setQ({ ...q, vol: v }); window.art?.setQuick('vol', v.toFixed(2)) }} />
           <span className="w-9 text-right text-xs text-muted">{Math.round(q.vol * 100)}%</span>
         </div>
@@ -300,7 +300,7 @@ export default function Notch() {
                 <div className="absolute right-0 top-9 z-10 flex w-60 flex-col gap-3 rounded-xl bg-card p-3 text-xs text-muted shadow-lg">
                   <label className="flex items-center gap-2">
                     {t('Glass')}
-                    <input type="range" min="0" max="100" value={tint} className="flex-1 accent-[#E8650A]"
+                    <input type="range" min="0" max="100" value={tint} className="flex-1 accent-accent"
                       onChange={(e) => { setTint(Number(e.target.value)); save('tint', e.target.value) }} />
                     {t('Solid')}
                   </label>

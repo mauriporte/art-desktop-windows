@@ -7,7 +7,8 @@ import { house } from './house.js'
 const ES = {
   // notch tabs and header
   Today: 'Hoy', Controls: 'Controles', Remote: 'Mando', Screens: 'Pantallas', Buttons: 'Botones', Look: 'Aspecto',
-  Glass: 'Cristal', Solid: 'Sólido', Language: 'Idioma', 'Talk to {a}': 'Hablar con {a}',
+  Glass: 'Cristal', Solid: 'Sólido', Accent: 'Color de acento', 'All devices': 'Todos los dispositivos',
+  'This device only': 'Solo este dispositivo', 'Follow shared': 'Seguir el compartido', Language: 'Idioma', 'Talk to {a}': 'Hablar con {a}',
   'Unpin (auto-hide again)': 'Desanclar (se oculta solo)', 'Pin open': 'Anclar abierto',
   // controls
   'Reading radios…': 'Leyendo radios…', 'Radios unavailable': 'Radios no disponibles', Airplane: 'Modo avión',
