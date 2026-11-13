@@ -1,6 +1,7 @@
 # Sets a picture as the desktop wallpaper stretched over all screens ("Span"), through Windows 11's IDesktopWallpaper
 # (the old SystemParametersInfo + WallpaperStyle=22 route leaves each screen showing the whole picture shrunk).
-param([Parameter(Mandatory)][string]$Path)
+# -Fill: the same picture on every screen instead, so a screen turned off or moved never leaves black
+param([Parameter(Mandatory)][string]$Path, [switch]$Fill)
 Add-Type @'
 using System; using System.Runtime.InteropServices;
 [ComImport, Guid("B92B56A9-8B55-4E14-9A89-0199BBB6F93B"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -16,16 +17,16 @@ public interface IDesktopWallpaper {
 [ComImport, Guid("C2CF3110-460E-4fc1-B9D0-8A1C0C9CC4BD")] public class DesktopWallpaperClass { }
 // the COM cast has to happen in C#: PowerShell can't cast the class to the interface
 public static class DW {
-  public static void Span(string p) { var w = (IDesktopWallpaper)new DesktopWallpaperClass(); w.SetBackgroundColor(0x050505); w.SetPosition(5 /* DWPOS_SPAN */); w.SetWallpaper(null, p); }
+  public static void Set(string p, int pos) { var w = (IDesktopWallpaper)new DesktopWallpaperClass(); w.SetBackgroundColor(0x050505); w.SetPosition(pos); w.SetWallpaper(null, p); }
 }
 '@
-[DW]::Span((Resolve-Path $Path).Path)
+[DW]::Set((Resolve-Path $Path).Path, $(if ($Fill) { 4 <# DWPOS_FILL #> } else { 5 <# DWPOS_SPAN #> }))
 
 # the lock screen shows only on the primary screen, so it gets that screen's cut of the same picture
 Add-Type -AssemblyName System.Drawing, System.Windows.Forms, System.Runtime.WindowsRuntime
 $v = [Windows.Forms.SystemInformation]::VirtualScreen; $p = [Windows.Forms.Screen]::PrimaryScreen.Bounds
 $src = [Drawing.Image]::FromFile((Resolve-Path $Path).Path)
-$cut = $src.Clone([Drawing.Rectangle]::new($p.X - $v.X, $p.Y - $v.Y, $p.Width, $p.Height), $src.PixelFormat)
+$cut = if ($Fill) { [Drawing.Bitmap]::new($src) } else { $src.Clone([Drawing.Rectangle]::new($p.X - $v.X, $p.Y - $v.Y, $p.Width, $p.Height), $src.PixelFormat) }
 $lock = Join-Path (Split-Path (Resolve-Path $Path).Path) 'art-lockscreen.png'
 $cut.Save($lock, [Drawing.Imaging.ImageFormat]::Png); $cut.Dispose(); $src.Dispose()
 $asTask = [WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | Select-Object -First 1
