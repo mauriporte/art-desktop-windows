@@ -830,8 +830,8 @@ ipcMain.handle('power:do', (_e, what) => { const p = POWER[what]; if (p) execFil
 // ([{ entity, name? }]), added, removed and arranged inside it.
 const OVERLAY = path.join(require('os').homedir(), '.config', 'art-desktop', 'overlay.json')
 let overlayWin = null
-// pinned (overlay.json "pinned"): it stays open behind the other windows, like a desktop layer, and comes back when
-// the app starts; unpinned it floats on top and closes when you're done
+// pinned (overlay.json "pinned"): once opened it stays open behind the other windows, like a desktop layer; unpinned
+// it floats on top and closes when you're done
 const overlayConf = () => { try { const d = JSON.parse(fs.readFileSync(OVERLAY, 'utf8')); return Array.isArray(d) ? { tiles: d } : d } catch { return { tiles: [] } } }
 const writeOverlay = (d) => { fs.mkdirSync(path.dirname(OVERLAY), { recursive: true }); fs.writeFileSync(OVERLAY, JSON.stringify(d, null, 1)) }
 const overlayLog = (e) => fs.appendFile(path.join(path.dirname(OVERLAY), 'app.log'), `${new Date().toISOString()} ${e.message}
@@ -896,7 +896,7 @@ function toggleOverlay() {
   overlayWin.on('blur', () => overlayConf().pinned && pinOverlay(true)) // pinned: back behind the windows after a click
 }
 ipcMain.on('overlay:pin', (_e, on) => { const d = overlayConf(); d.pinned = !!on; writeOverlay(d); pinOverlay(!!on) })
-app.whenReady().then(async () => { await pullMaster(); if (overlayConf().pinned) setTimeout(toggleOverlay, 3000) })
+app.whenReady().then(pullMaster) // pinned or not, it no longer opens by itself at start
 ipcMain.on('overlay:toggle', toggleOverlay)
 // the usable area changed (a dock reserved or released its strip, or the taskbar moved): the dashboard re-fits, or its
 // right edge, with the side panels' X, ends up under a reserved dock

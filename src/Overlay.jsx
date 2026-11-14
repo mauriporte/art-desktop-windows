@@ -578,8 +578,12 @@ export default function Overlay() {
     if (want && Math.abs(want - (row ?? cell)) > 1) setRow(want)
   })
   useLayoutEffect(() => {
-    const b = body.current?.getBoundingClientRect().bottom
-    if (!b) return
+    // the grid's own square-cell height, not the body's: the side column can't shrink with the cells, and measuring it
+    // here sent the cells down to the minimum (narrow tiles, 14/11)
+    const grid = body.current?.querySelector('.grid')
+    if (!grid) return
+    const rows = getComputedStyle(grid).gridTemplateRows.split(' ').filter(Boolean).length
+    const b = grid.getBoundingClientRect().top + rows * cell + (rows - 1) * GAP
     if (b > innerHeight - 24 && cell > 64) setCell((c) => c - 6)
     else if (b < innerHeight - 24 - (cell + GAP) && cell < CELL) setCell((c) => Math.min(CELL, c + 6))
   })
@@ -636,7 +640,7 @@ export default function Overlay() {
         </div>
         {/* the servers, one under the other; a tap slides its apps in from the right */}
         {/* drag to reorder them too (locked with the rest) */}
-        <div ref={side} className="flex w-[250px] shrink-0 flex-col gap-2">
+        <div ref={side} className="flex max-h-[calc(100vh-4rem)] w-[250px] shrink-0 flex-col gap-2">
           {/* the controls: an invisible tile on top of the first side tile, outside the grid's margins */}
           {/* right-aligned: the click-through button keeps its corner whether or not the others show */}
           <div className="flex h-9 items-center justify-end gap-2">
@@ -654,7 +658,7 @@ export default function Overlay() {
               className={ctl} style={{ ...ctlStyle(through), opacity: 1 }}>{through ? <MousePointerBan size={16} /> : <MousePointerClick size={16} />}</button>
           </div>
 
-          {servers.length > 0 && <Sortable name="overlay-servers" locked={locked} className="mt-1 flex flex-col gap-2 transition-opacity" style={{ opacity: fade }}>
+          {servers.length > 0 && <Sortable name="overlay-servers" locked={locked} className="mt-1 flex min-h-0 flex-col gap-2 overflow-y-auto [scrollbar-width:none] transition-opacity" style={{ opacity: fade }}>
             {servers.map((sv) => <ServerTile key={sv.name} server={sv} open={() => setServer(sv)} />)}
           </Sortable>}
           {/* the see-through slider, a tile like the ones above, always at the bottom of this column (the dashboard's
